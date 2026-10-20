@@ -1,0 +1,26 @@
+{
+  "name": "awesome-vibe-slopping",
+  "owner": {
+    "name": "Dariushek"
+  },
+  "metadata": {
+    "description": "Provider-agnostic coding agent harness: rules, skills, agents."
+  },
+  "plugins": [
+    {
+      "name": "communication",
+      "source": "./plugins/communication",
+      "description": "How agents write and talk. Meant for global use, also outside code."
+    },
+    {
+      "name": "coding",
+      "source": "./plugins/coding",
+      "description": "General rules for working with code."
+    },
+    {
+      "name": "engineering",
+      "source": "./plugins/engineering",
+      "description": "Code quality and testing rules, commit-message skill."
+    }
+  ]
+}

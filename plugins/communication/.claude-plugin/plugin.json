@@ -1,0 +1,8 @@
+{
+  "name": "communication",
+  "version": "0.1.0",
+  "description": "How agents write and talk. Meant for global use, also outside code.",
+  "author": {
+    "name": "Dariushek"
+  }
+}

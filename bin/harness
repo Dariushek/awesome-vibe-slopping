@@ -1,0 +1,385 @@
+#!/usr/bin/env python3
+"""Render harness bundles from this repo into a project."""
+
+import argparse
+import hashlib
+import json
+import subprocess
+import sys
+from enum import Enum
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+PLUGINS_DIR = REPO / "plugins"
+MARKETPLACE_FILE = REPO / ".claude-plugin" / "marketplace.json"
+MARKETPLACE_NAME = "awesome-vibe-slopping"
+GITHUB_REPO = "Dariushek/awesome-vibe-slopping"
+
+PLUGIN_MANIFEST = Path(".claude-plugin") / "plugin.json"
+LOCK_FILE = ".harness.json"
+AGENTS_FILE = "AGENTS.md"
+CLAUDE_FILE = "CLAUDE.md"
+CLAUDE_SETTINGS = Path(".claude") / "settings.json"
+AGENTS_IMPORT = "@AGENTS.md"
+
+BLOCK_BEGIN = "<!-- harness:begin"
+BLOCK_BEGIN_LINE = f"{BLOCK_BEGIN} generated from {MARKETPLACE_NAME}, edit there -->"
+BLOCK_END = "<!-- harness:end -->"
+
+GLOBAL_LOCK = Path.home() / ".config" / MARKETPLACE_NAME / "global.json"
+GLOBAL_FILES = {
+    ".claude": "CLAUDE.md",
+    ".codex": "AGENTS.md",
+    ".gemini": "GEMINI.md",
+}
+
+CLAUDE_KINDS = ("skills", "agents", "commands")
+FRONTMATTER_FENCE = "---"
+
+
+class Target(str, Enum):
+    AGENTS = "agents"
+    CLAUDE = "claude"
+    CLAUDE_PLUGIN = "claude-plugin"
+
+
+class Overwrite(Enum):
+    KEEP_EDITED = 1
+    FORCE = 2
+
+
+DEFAULT_TARGETS = [Target.AGENTS, Target.CLAUDE]
+
+
+def bundle_names():
+    manifests = PLUGINS_DIR.glob(f"*/{PLUGIN_MANIFEST}")
+    return sorted(m.parent.parent.name for m in manifests)
+
+
+def bundle_dir(name):
+    path = PLUGINS_DIR / name
+    if not (path / PLUGIN_MANIFEST).is_file():
+        sys.exit(f"Unknown bundle: {name}. Available: {', '.join(bundle_names())}")
+
+    return path
+
+
+def sha(data):
+    return hashlib.sha256(data).hexdigest()
+
+
+def read_json(path):
+    if not path.is_file():
+        return {}
+
+    return json.loads(path.read_text())
+
+
+def write_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def repo_commit():
+    result = subprocess.run(
+        ["git", "-C", str(REPO), "describe", "--always", "--dirty"],
+        capture_output=True, text=True,
+    )
+    return result.stdout.strip() or None
+
+
+def frontmatter(path):
+    lines = path.read_text().splitlines()
+    if not lines or lines[0] != FRONTMATTER_FENCE:
+        return {}
+
+    fields = {}
+    for line in lines[1:]:
+        if line == FRONTMATTER_FENCE:
+            return fields
+
+        key, sep, value = line.partition(":")
+        if not sep:
+            continue
+
+        fields[key.strip()] = value.strip()
+
+    return {}
+
+
+def render_rules(bundles):
+    parts = []
+    for name in bundles:
+        for rule in sorted((bundle_dir(name) / "rules").glob("*.md")):
+            parts.append(rule.read_text().strip())
+
+    return "\n\n".join(parts)
+
+
+def add_tree(files, src, dest):
+    if not src.is_dir():
+        return
+
+    for path in sorted(src.rglob("*")):
+        if not path.is_file():
+            continue
+
+        rel = f"{dest}/{path.relative_to(src).as_posix()}"
+        if rel in files:
+            sys.exit(f"Two bundles provide {rel}")
+
+        files[rel] = path.read_bytes()
+
+
+def plan_files(bundles, targets):
+    files = {}
+    for name in bundles:
+        root = bundle_dir(name)
+        if Target.AGENTS in targets:
+            add_tree(files, root / "skills", ".agents/skills")
+
+        if Target.CLAUDE not in targets:
+            continue
+
+        for kind in CLAUDE_KINDS:
+            add_tree(files, root / kind, f".claude/{kind}")
+
+    return files
+
+
+def is_edited(path, digest):
+    if not path.is_file():
+        return False
+
+    if digest is None:
+        return True
+
+    return sha(path.read_bytes()) != digest
+
+
+def prune_dirs(project, path):
+    parent = path.parent
+    while parent != project and parent.is_dir() and not any(parent.iterdir()):
+        parent.rmdir()
+        parent = parent.parent
+
+
+def write_files(project, files, previous, policy):
+    written = {}
+    for rel, data in files.items():
+        path = project / rel
+        if policy is Overwrite.KEEP_EDITED and is_edited(path, previous.get(rel)):
+            print(f"skip {rel}: changed in project, use --force")
+            if rel in previous:
+                written[rel] = previous[rel]
+            continue
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(data)
+        written[rel] = sha(data)
+
+    for rel in previous.keys() - files.keys():
+        path = project / rel
+        if policy is Overwrite.KEEP_EDITED and is_edited(path, previous[rel]):
+            print(f"keep {rel}: no longer managed but changed in project")
+            continue
+
+        path.unlink(missing_ok=True)
+        prune_dirs(project, path)
+
+    return written
+
+
+def upsert_block(path, body):
+    block = f"{BLOCK_BEGIN_LINE}\n{body}\n{BLOCK_END}"
+    text = path.read_text() if path.is_file() else ""
+    start = text.find(BLOCK_BEGIN)
+    end = text.find(BLOCK_END)
+
+    if start != -1 and end > start:
+        text = text[:start] + block + text[end + len(BLOCK_END):]
+    elif text.strip():
+        text = f"{text.rstrip()}\n\n{block}\n"
+    else:
+        text = f"{block}\n"
+
+    path.write_text(text)
+
+
+def ensure_import(project):
+    path = project / CLAUDE_FILE
+    text = path.read_text() if path.is_file() else ""
+    if any(line.strip() == AGENTS_IMPORT for line in text.splitlines()):
+        return
+
+    body = f"{AGENTS_IMPORT}\n\n{text}" if text.strip() else f"{AGENTS_IMPORT}\n"
+    path.write_text(body)
+
+
+def has_components(name):
+    root = bundle_dir(name)
+    kinds = (*CLAUDE_KINDS, "hooks")
+    return any((root / kind).is_dir() for kind in kinds) or (root / ".mcp.json").is_file()
+
+
+def enable_plugins(project, bundles):
+    path = project / CLAUDE_SETTINGS
+    settings = read_json(path)
+    marketplaces = settings.setdefault("extraKnownMarketplaces", {})
+    marketplaces[MARKETPLACE_NAME] = {"source": {"source": "github", "repo": GITHUB_REPO}}
+
+    suffix = f"@{MARKETPLACE_NAME}"
+    enabled = {k: v for k, v in settings.get("enabledPlugins", {}).items() if not k.endswith(suffix)}
+    for name in bundles:
+        if has_components(name):
+            enabled[f"{name}{suffix}"] = True
+
+    settings["enabledPlugins"] = enabled
+    write_json(path, settings)
+
+
+def pick_bundles(args, lock):
+    bundles = args.bundles or lock.get("bundles")
+    if not bundles:
+        sys.exit(f"No bundles given and none saved. Available: {', '.join(bundle_names())}")
+
+    return bundles
+
+
+def resolve_sync(args, lock):
+    bundles = pick_bundles(args, lock)
+    raw = args.targets.split(",") if args.targets else lock.get("targets", DEFAULT_TARGETS)
+    try:
+        targets = [Target(t) for t in raw]
+    except ValueError as error:
+        sys.exit(f"{error}. Valid targets: {', '.join(t.value for t in Target)}")
+
+    if Target.CLAUDE in targets and Target.CLAUDE_PLUGIN in targets:
+        sys.exit("Pick one of claude and claude-plugin")
+
+    return bundles, targets
+
+
+def cmd_sync(args):
+    project = Path(args.project).resolve()
+    if not project.is_dir():
+        sys.exit(f"Not a directory: {project}")
+
+    lock_path = project / LOCK_FILE
+    lock = read_json(lock_path)
+    bundles, targets = resolve_sync(args, lock)
+    policy = Overwrite.FORCE if args.force else Overwrite.KEEP_EDITED
+
+    upsert_block(project / AGENTS_FILE, render_rules(bundles))
+    if Target.CLAUDE in targets or Target.CLAUDE_PLUGIN in targets:
+        ensure_import(project)
+
+    if Target.CLAUDE_PLUGIN in targets:
+        enable_plugins(project, bundles)
+
+    files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), policy)
+    write_json(lock_path, {
+        "source": GITHUB_REPO,
+        "commit": repo_commit(),
+        "bundles": bundles,
+        "targets": [t.value for t in targets],
+        "files": files,
+    })
+    print(f"Synced {', '.join(bundles)} into {project}")
+
+
+def cmd_global(args):
+    lock = read_json(GLOBAL_LOCK)
+    bundles = pick_bundles(args, lock)
+    body = render_rules(bundles)
+
+    for dirname, filename in GLOBAL_FILES.items():
+        agent_dir = Path.home() / dirname
+        if not agent_dir.is_dir():
+            continue
+
+        upsert_block(agent_dir / filename, body)
+        print(f"Wrote {', '.join(bundles)} into {agent_dir / filename}")
+
+    write_json(GLOBAL_LOCK, {"source": GITHUB_REPO, "commit": repo_commit(), "bundles": bundles})
+
+
+def cmd_list(_args):
+    for name in bundle_names():
+        manifest = read_json(bundle_dir(name) / PLUGIN_MANIFEST)
+        print(f"{name:16} {manifest.get('description', '')}")
+
+
+def check_named(path, expected, problems):
+    fields = frontmatter(path)
+    if fields.get("name") != expected:
+        problems.append(f"{path}: frontmatter name must be {expected}")
+
+    if not fields.get("description"):
+        problems.append(f"{path}: frontmatter description missing")
+
+
+def check_bundle(name, problems):
+    root = PLUGINS_DIR / name
+    manifest = read_json(root / PLUGIN_MANIFEST)
+    if manifest.get("name") != name:
+        problems.append(f"{root / PLUGIN_MANIFEST}: name must be {name}")
+
+    for skill in sorted((root / "skills").glob("*/")):
+        check_named(skill / "SKILL.md", skill.name, problems)
+
+    for agent in sorted((root / "agents").glob("*.md")):
+        check_named(agent, agent.stem, problems)
+
+    for rule in sorted((root / "rules").glob("*.md")):
+        if not rule.read_text().startswith("## "):
+            problems.append(f"{rule}: must start with a ## heading")
+
+
+def cmd_check(_args):
+    problems = []
+    names = bundle_names()
+    for name in names:
+        check_bundle(name, problems)
+
+    listed = {p["name"]: p["source"] for p in read_json(MARKETPLACE_FILE).get("plugins", [])}
+    for name in names:
+        if listed.get(name) != f"./plugins/{name}":
+            problems.append(f"{MARKETPLACE_FILE}: {name} missing or wrong source")
+
+    for name in listed.keys() - set(names):
+        problems.append(f"{MARKETPLACE_FILE}: {name} has no plugin directory")
+
+    for problem in problems:
+        print(problem)
+
+    if problems:
+        sys.exit(1)
+
+    print("OK")
+
+
+def main():
+    parser = argparse.ArgumentParser(prog="harness", description=__doc__)
+    sub = parser.add_subparsers(dest="command", required=True)
+
+    sub.add_parser("list", help="list bundles").set_defaults(func=cmd_list)
+    sub.add_parser("check", help="validate this repo").set_defaults(func=cmd_check)
+
+    sync = sub.add_parser("sync", help="render bundles into a project")
+    sync.add_argument("project")
+    sync.add_argument("bundles", nargs="*", help=f"defaults to bundles in {LOCK_FILE}")
+    sync.add_argument("--targets", help="comma separated: agents, claude, claude-plugin")
+    sync.add_argument("--force", action="store_true", help="overwrite files changed in the project")
+    sync.set_defaults(func=cmd_sync)
+
+    glob = sub.add_parser("global", help="render bundle rules into user-level agent instructions")
+    glob.add_argument("bundles", nargs="*", help=f"defaults to bundles saved in {GLOBAL_LOCK}")
+    glob.set_defaults(func=cmd_global)
+
+    args = parser.parse_args()
+    args.func(args)
+
+
+if __name__ == "__main__":
+    main()
