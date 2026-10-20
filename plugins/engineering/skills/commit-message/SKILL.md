@@ -13,6 +13,7 @@ description: Write a git commit message following the house rules. Use whenever 
 6. Imperative mood. It must complete: "If applied, this commit will ...".
 7. Wrap the body at 72 characters.
 8. Body explains what and why, not how. The code shows the how.
+9. No AI attribution: no Co-Authored-By trailer, no "Generated with" line.
 
 Get the branch with `git branch --show-current`.
 
