@@ -26,6 +26,11 @@
       "name": "git",
       "source": "./plugins/git",
       "description": "Git conventions: commit-message skill."
+    },
+    {
+      "name": "csharp",
+      "source": "./plugins/csharp",
+      "description": "C# language rules."
     }
   ]
 }

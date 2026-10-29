@@ -24,6 +24,7 @@ bin/harness                       sync and validation
 | `coding`        | General rules for working with code                   |
 | `engineering`   | Code quality and testing rules                        |
 | `git`           | `commit-message` skill                                |
+| `csharp`        | C# language rules                                     |
 
 ## Use in a project
 
