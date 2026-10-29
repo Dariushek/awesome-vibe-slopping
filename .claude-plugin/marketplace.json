@@ -20,7 +20,12 @@
     {
       "name": "engineering",
       "source": "./plugins/engineering",
-      "description": "Code quality and testing rules, commit-message skill."
+      "description": "Code quality and testing rules."
+    },
+    {
+      "name": "git",
+      "source": "./plugins/git",
+      "description": "Git conventions: commit-message skill."
     }
   ]
 }

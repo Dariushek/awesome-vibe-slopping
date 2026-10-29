@@ -22,7 +22,8 @@ bin/harness                       sync and validation
 |-----------------|-------------------------------------------------------|
 | `communication` | How agents write and talk. Global, also outside code  |
 | `coding`        | General rules for working with code                   |
-| `engineering`   | Code quality and testing rules, `commit-message` skill |
+| `engineering`   | Code quality and testing rules                        |
+| `git`           | `commit-message` skill                                |
 
 ## Use in a project
 

@@ -1,7 +1,7 @@
 {
   "name": "engineering",
-  "version": "0.3.0",
-  "description": "Code quality and testing rules, commit-message skill.",
+  "version": "0.4.0",
+  "description": "Code quality and testing rules.",
   "author": {
     "name": "Dariushek"
   }

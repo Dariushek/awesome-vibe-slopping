@@ -196,7 +196,13 @@ def upsert_block(path, body):
     start = text.find(BLOCK_BEGIN)
     end = text.find(BLOCK_END)
 
-    if start != -1 and end > start:
+    has_block = start != -1 and end > start
+    if not body:
+        if has_block:
+            path.write_text(text[:start].rstrip() + "\n" + text[end + len(BLOCK_END):].lstrip("\n"))
+        return
+
+    if has_block:
         text = text[:start] + block + text[end + len(BLOCK_END):]
     elif text.strip():
         text = f"{text.rstrip()}\n\n{block}\n"
