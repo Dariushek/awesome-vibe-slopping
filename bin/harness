@@ -32,6 +32,11 @@ GLOBAL_FILES = {
     ".codex": "AGENTS.md",
     ".gemini": "GEMINI.md",
 }
+GLOBAL_SKILL_DIRS = {
+    ".claude": ".claude/skills",
+    ".codex": ".agents/skills",
+    ".config/devin": ".agents/skills",
+}
 
 CLAUDE_KINDS = ("skills", "agents", "commands")
 FRONTMATTER_FENCE = "---"
@@ -147,6 +152,18 @@ def plan_files(bundles, targets):
     return files
 
 
+def plan_global_files(bundles):
+    home = Path.home()
+    dests = {dest for agent, dest in GLOBAL_SKILL_DIRS.items() if (home / agent).is_dir()}
+
+    files = {}
+    for name in bundles:
+        for dest in sorted(dests):
+            add_tree(files, bundle_dir(name) / "skills", dest)
+
+    return files
+
+
 def is_edited(path, digest):
     if not path.is_file():
         return False
@@ -169,7 +186,7 @@ def write_files(project, files, previous, policy):
     for rel, data in files.items():
         path = project / rel
         if policy is Overwrite.KEEP_EDITED and is_edited(path, previous.get(rel)):
-            print(f"skip {rel}: changed in project, use --force")
+            print(f"skip {rel}: changed since last sync, use --force")
             if rel in previous:
                 written[rel] = previous[rel]
             continue
@@ -181,7 +198,7 @@ def write_files(project, files, previous, policy):
     for rel in previous.keys() - files.keys():
         path = project / rel
         if policy is Overwrite.KEEP_EDITED and is_edited(path, previous[rel]):
-            print(f"keep {rel}: no longer managed but changed in project")
+            print(f"keep {rel}: no longer managed but changed since last sync")
             continue
 
         path.unlink(missing_ok=True)
@@ -252,6 +269,10 @@ def pick_bundles(args, lock):
     return bundles
 
 
+def overwrite_policy(args):
+    return Overwrite.FORCE if args.force else Overwrite.KEEP_EDITED
+
+
 def resolve_sync(args, lock):
     bundles = pick_bundles(args, lock)
     raw = args.targets.split(",") if args.targets else lock.get("targets", DEFAULT_TARGETS)
@@ -274,7 +295,6 @@ def cmd_sync(args):
     lock_path = project / LOCK_FILE
     lock = read_json(lock_path)
     bundles, targets = resolve_sync(args, lock)
-    policy = Overwrite.FORCE if args.force else Overwrite.KEEP_EDITED
 
     upsert_block(project / AGENTS_FILE, render_rules(bundles))
     if Target.CLAUDE in targets or Target.CLAUDE_PLUGIN in targets:
@@ -283,7 +303,7 @@ def cmd_sync(args):
     if Target.CLAUDE_PLUGIN in targets:
         enable_plugins(project, bundles)
 
-    files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), policy)
+    files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), overwrite_policy(args))
     write_json(lock_path, {
         "source": GITHUB_REPO,
         "commit": repo_commit(),
@@ -307,7 +327,13 @@ def cmd_global(args):
         upsert_block(agent_dir / filename, body)
         print(f"Wrote {', '.join(bundles)} into {agent_dir / filename}")
 
-    write_json(GLOBAL_LOCK, {"source": GITHUB_REPO, "commit": repo_commit(), "bundles": bundles})
+    files = write_files(Path.home(), plan_global_files(bundles), lock.get("files", {}), overwrite_policy(args))
+    write_json(GLOBAL_LOCK, {
+        "source": GITHUB_REPO,
+        "commit": repo_commit(),
+        "bundles": bundles,
+        "files": files,
+    })
 
 
 def cmd_list(_args):
@@ -379,8 +405,9 @@ def main():
     sync.add_argument("--force", action="store_true", help="overwrite files changed in the project")
     sync.set_defaults(func=cmd_sync)
 
-    glob = sub.add_parser("global", help="render bundle rules into user-level agent instructions")
+    glob = sub.add_parser("global", help="render bundle rules and skills into user-level agent config")
     glob.add_argument("bundles", nargs="*", help=f"defaults to bundles saved in {GLOBAL_LOCK}")
+    glob.add_argument("--force", action="store_true", help="overwrite skills changed outside this repo")
     glob.set_defaults(func=cmd_global)
 
     args = parser.parse_args()

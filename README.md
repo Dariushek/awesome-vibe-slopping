@@ -46,14 +46,16 @@ Default `--targets agents,claude`. Use `claude-plugin` instead of `claude` to st
 
 `.harness.json` records bundles, targets, source commit and a hash per file. Files changed in the project are skipped on resync unless `--force`.
 
-## Global rules
+## Global
 
 ```sh
-bin/harness global communication
+bin/harness global communication browser
 bin/harness global                  # later: update from saved bundles
 ```
 
-Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`. Bundles are saved in `~/.config/awesome-vibe-slopping/global.json`. Global bundles apply everywhere, so leave them out of project syncs.
+Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`. Skills are copied to `~/.claude/skills/` and, when Codex or Devin is installed, `~/.agents/skills/`. Skills changed outside this repo are skipped unless `--force`.
+
+The list you pass replaces the saved one, and skills of dropped bundles are removed. Bundles and file hashes are saved in `~/.config/awesome-vibe-slopping/global.json`. Global bundles apply everywhere, so leave them out of project syncs.
 
 Plugin only, without sync:
 
