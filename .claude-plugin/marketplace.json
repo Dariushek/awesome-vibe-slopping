@@ -31,6 +31,11 @@
       "name": "csharp",
       "source": "./plugins/csharp",
       "description": "C# language rules."
+    },
+    {
+      "name": "browser",
+      "source": "./plugins/browser",
+      "description": "Browser automation and scraping: playwright skill."
     }
   ]
 }

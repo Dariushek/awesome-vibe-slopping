@@ -25,6 +25,7 @@ bin/harness                       sync and validation
 | `engineering`   | Code quality and testing rules                        |
 | `git`           | `commit-message` skill                                |
 | `csharp`        | C# language rules                                     |
+| `browser`       | `playwright` skill                                    |
 
 ## Use in a project
 

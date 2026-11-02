@@ -1,0 +1,8 @@
+{
+  "name": "browser",
+  "version": "0.2.0",
+  "description": "Browser automation and scraping: playwright skill.",
+  "author": {
+    "name": "Dariushek"
+  }
+}
