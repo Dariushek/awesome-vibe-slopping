@@ -26,6 +26,7 @@ bin/harness                       sync and validation
 | `git`           | `commit-message` skill                                |
 | `csharp`        | C# language rules                                     |
 | `browser`       | `playwright` skill                                    |
+| `architecture`  | Follow ADRs, `rs-architecture-decision` skill         |
 
 ## Use in a project
 

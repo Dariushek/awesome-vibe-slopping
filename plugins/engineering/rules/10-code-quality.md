@@ -1,6 +1,6 @@
 ## Code quality
 
-- Follow the existing architecture in the project. Look for ADRs, if there aren't any, derive them based on the existing code.
+- Follow the existing architecture in the project.
 - Avoid magic numbers and strings by extracting recurring or meaningful values into descriptive constants or enums. Keep self-explanatory, one-off values inline to avoid clutter. If a value comes from a spec, such as HTTP 200 OK, use a constant regardless.
 - Reduce code indentation. Avoid Arrow Anti-Pattern. Leverage early return and continue.
 - Keep function names short, under 30 characters. Does not apply to test method names.

@@ -36,6 +36,11 @@
       "name": "browser",
       "source": "./plugins/browser",
       "description": "Browser automation and scraping: playwright skill."
+    },
+    {
+      "name": "architecture",
+      "source": "./plugins/architecture",
+      "description": "Follow and record architecture decisions: rules and rs-architecture-decision skill."
     }
   ]
 }
