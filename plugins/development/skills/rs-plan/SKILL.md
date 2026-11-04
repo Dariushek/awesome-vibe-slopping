@@ -1,0 +1,48 @@
+---
+name: rs-plan
+description: Split an approved specification into small, well-described tasks in PLAN.md. Use after a spec is approved, or when the user asks for an implementation plan.
+---
+
+# Plan
+
+## Steps
+
+1. Read the spec. If its status is not `Approved`, stop and say so.
+2. Split the work into tasks. Write `PLAN.md` next to `SPEC.md` from the template.
+3. Show it to the user. Iterate until they approve. Then set `Status: Approved`.
+4. Create the branch named in the plan from the current branch and commit `SPEC.md` and `PLAN.md` to it.
+5. Tell the user the two ways on: `rs-implement-task T1` and onward by hand, or `rs-run-plan` for all of it.
+
+## Template
+
+```markdown
+# Plan: Title
+
+- Spec: [SPEC.md](SPEC.md)
+- Branch: feat/<slug>
+- Status: Draft | Approved
+
+## Tasks
+
+| ID | Title | Depends on | Status |
+|----|-------|------------|--------|
+| T1 | ...   | -          | todo   |
+
+## T1. Title
+
+- Goal: one or two sentences.
+- Files: paths created or changed.
+- Acceptance: which spec criteria it covers, such as AC1.
+- Test: the failing test that proves it.
+- Notes: anything the implementer must know.
+```
+
+Status is one of `todo`, `in-progress`, `done`, `blocked`.
+
+## Rules
+
+- One task is one commit, small enough to review in a few minutes.
+- Each task is self-contained. An agent with no chat history must be able to do it from the task and the spec alone.
+- Every acceptance criterion is covered by at least one task.
+- A task depends on another when it needs that task's code or touches the same files. Tasks with no dependency between them and no shared files can run in parallel, so split along those lines where it is natural.
+- List every file a task touches. rs-run-plan uses `Files` to decide what runs in parallel.

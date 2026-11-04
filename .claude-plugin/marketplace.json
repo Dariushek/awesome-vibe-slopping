@@ -41,6 +41,11 @@
       "name": "architecture",
       "source": "./plugins/architecture",
       "description": "Follow and record architecture decisions: rules and rs-architecture-decision skill."
+    },
+    {
+      "name": "development",
+      "source": "./plugins/development",
+      "description": "Development loop: spec, plan, tasks, validation gate and automated plan runs."
     }
   ]
 }

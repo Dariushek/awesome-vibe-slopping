@@ -27,6 +27,7 @@ bin/harness                       sync and validation
 | `csharp`        | C# language rules                                     |
 | `browser`       | `playwright` skill                                    |
 | `architecture`  | Follow ADRs, `rs-architecture-decision` skill         |
+| `development`   | Spec, plan, task loop, gate and automated plan runs   |
 
 ## Use in a project
 
