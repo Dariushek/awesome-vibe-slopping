@@ -5,6 +5,8 @@ description: Implement one task from PLAN.md with the development loop. Use when
 
 # Implement task
 
+If the project has `.agents/overrides/rs-implement-task.md`, read it first. Where it conflicts with this skill, it wins.
+
 ## Steps
 
 1. Read the task, the spec, the ADRs that touch its files and the project's AGENTS.md.

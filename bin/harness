@@ -40,6 +40,7 @@ GLOBAL_SKILL_DIRS = {
 
 CLAUDE_KINDS = ("skills", "agents", "commands")
 GIT_HOOKS_DIR = ".githooks"
+OVERRIDE_PATH = ".agents/overrides/{name}.md"
 FRONTMATTER_FENCE = "---"
 
 
@@ -389,6 +390,8 @@ def check_bundle(name, problems):
 
     for skill in sorted((root / "skills").glob("*/")):
         check_named(skill / "SKILL.md", skill.name, problems)
+        if OVERRIDE_PATH.format(name=skill.name) not in (skill / "SKILL.md").read_text():
+            problems.append(f"{skill / 'SKILL.md'}: must point to {OVERRIDE_PATH.format(name=skill.name)}")
 
     for agent in sorted((root / "agents").glob("*.md")):
         check_named(agent, agent.stem, problems)

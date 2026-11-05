@@ -5,6 +5,8 @@ description: Record an architecture decision as an ADR in the project. Use when 
 
 # Architecture decision record
 
+If the project has `.agents/overrides/rs-architecture-decision.md`, read it first. Where it conflicts with this skill, it wins.
+
 One ADR per decision. Write it when the decision is made, not after the code.
 
 ## What counts

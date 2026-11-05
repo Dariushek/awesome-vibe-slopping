@@ -5,6 +5,8 @@ description: Write a feature specification by interviewing the user about the do
 
 # Specification
 
+If the project has `.agents/overrides/rs-spec.md`, read it first. Where it conflicts with this skill, it wins.
+
 The spec describes the domain the way the user sees it, then the scenarios that prove the feature works. Scenarios become automated tests, one or more per scenario.
 
 ## Steps

@@ -5,6 +5,8 @@ description: Write a git commit message following the house rules. Use whenever 
 
 # Commit message
 
+If the project has `.agents/overrides/commit-message.md`, read it first. Where it conflicts with this skill, it wins.
+
 1. Start the subject with the task number from the branch name, as `#12345`. If the branch name has none, skip it.
 2. Separate subject and body with one blank line.
 3. Subject: 50 characters, 72 hard limit.

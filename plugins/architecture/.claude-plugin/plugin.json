@@ -1,6 +1,6 @@
 {
   "name": "architecture",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Follow and record architecture decisions: rules and rs-architecture-decision skill.",
   "author": {
     "name": "Dariushek"

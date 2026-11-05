@@ -5,6 +5,8 @@ description: Split an approved specification into small, well-described tasks in
 
 # Plan
 
+If the project has `.agents/overrides/rs-plan.md`, read it first. Where it conflicts with this skill, it wins.
+
 ## Steps
 
 1. Read the spec. If its status is not `Approved`, or its `Prototype:` line is empty, stop and say so.

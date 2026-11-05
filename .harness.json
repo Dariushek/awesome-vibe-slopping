@@ -1,6 +1,6 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "cbc28fa-dirty",
+  "commit": "875d031-dirty",
   "bundles": [
     "git"
   ],
@@ -9,7 +9,7 @@
     "claude"
   ],
   "files": {
-    ".agents/skills/commit-message/SKILL.md": "e44f213ea45076ccec24060424fc6f28637e7dbfb79d772bd6bf0f869ced3491",
-    ".claude/skills/commit-message/SKILL.md": "e44f213ea45076ccec24060424fc6f28637e7dbfb79d772bd6bf0f869ced3491"
+    ".agents/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54",
+    ".claude/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54"
   }
 }

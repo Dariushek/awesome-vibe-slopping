@@ -5,6 +5,8 @@ description: Run all remaining tasks of an approved PLAN.md automatically, in pa
 
 # Run plan
 
+If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it conflicts with this skill, it wins.
+
 ## Before starting
 
 1. Read PLAN.md and the spec. Both must be `Approved`.

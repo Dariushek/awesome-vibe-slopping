@@ -5,6 +5,8 @@ description: Design the screens of an approved specification as a clickable prot
 
 # UI design
 
+If the project has `.agents/overrides/rs-ui-design.md`, read it first. Where it conflicts with this skill, it wins.
+
 The prototype shows how the spec's workflows look, so flow mistakes surface before code. It is a design, never production code.
 
 ## Steps

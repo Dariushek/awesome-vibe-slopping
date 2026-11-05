@@ -50,6 +50,10 @@ Default `--targets agents,claude`. Use `claude-plugin` instead of `claude` to st
 
 `.harness.json` records bundles, targets, source commit and a hash per file. Files changed in the project are skipped on resync unless `--force`.
 
+## Project overrides
+
+Every skill first reads `.agents/overrides/<skill>.md` from the project when it exists, and that file wins where it conflicts. Use it for project specifics, such as spec location, commit format or extra steps, without forking the skill. Overrides are project files, never synced or overwritten.
+
 ## Validation gate
 
 The `validation` bundle syncs `.githooks/` and sets `core.hooksPath` to it, unless the project already uses another hooks path. The hooks run the commands in `.agents/validation.json`, which the project owns:

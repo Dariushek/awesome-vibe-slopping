@@ -5,6 +5,8 @@ description: Run the project's validation gate, fix failures and commit when it 
 
 # Check and commit
 
+If the project has `.agents/overrides/rs-check-and-commit.md`, read it first. Where it conflicts with this skill, it wins.
+
 ## Steps
 
 1. Read the commands in `.agents/validation.json`, `commit` first, then `push`. If the file is missing, derive the commands from the project, such as the solution file, package.json scripts or pyproject.toml. Propose them to the user and, once approved, write the file:

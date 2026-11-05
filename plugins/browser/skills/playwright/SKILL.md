@@ -5,6 +5,8 @@ description: Drive a real browser with Playwright. Use whenever a task needs a b
 
 # Playwright
 
+If the project has `.agents/overrides/playwright.md`, read it first. Where it conflicts with this skill, it wins.
+
 Use Playwright for all browser work. Use another browser tool only if the user asks.
 
 ## Setup
