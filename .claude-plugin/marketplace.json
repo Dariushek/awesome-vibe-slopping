@@ -45,7 +45,7 @@
     {
       "name": "development",
       "source": "./plugins/development",
-      "description": "Development loop: spec, plan, tasks, validation gate and automated plan runs."
+      "description": "Development loop: spec, UI design, plan, tasks, validation gate and automated plan runs."
     }
   ]
 }

@@ -7,7 +7,7 @@ description: Split an approved specification into small, well-described tasks in
 
 ## Steps
 
-1. Read the spec. If its status is not `Approved`, stop and say so.
+1. Read the spec. If its status is not `Approved`, or its `Prototype:` line is empty, stop and say so.
 2. Split the work into tasks. Write `PLAN.md` next to `SPEC.md` from the template.
 3. Show it to the user. Iterate until they approve. Then set `Status: Approved`.
 4. Create the branch named in the plan from the current branch and commit `SPEC.md` and `PLAN.md` to it.
@@ -32,6 +32,7 @@ description: Split an approved specification into small, well-described tasks in
 
 - Goal: one or two sentences.
 - Files: paths created or changed.
+- Screens: prototype screens it builds, if any.
 - Scenarios: which spec scenarios it makes pass, such as S1, S2.
 - Requirements: which non-functional requirements it satisfies, such as N1.
 - Notes: anything the implementer must know.
