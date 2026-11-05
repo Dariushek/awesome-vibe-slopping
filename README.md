@@ -11,6 +11,7 @@ plugins/<bundle>/                 one reusable unit, also a Claude Code plugin
   skills/<name>/SKILL.md          Agent Skills standard
   agents/<name>.md                subagents
   commands/<name>.md              slash commands
+  githooks/<hook>                 git hooks, synced to .githooks/ in every target
   hooks/hooks.json, .mcp.json     Claude Code only, plugin delivery only
 .claude-plugin/marketplace.json   lists every bundle
 bin/harness                       sync and validation
@@ -28,6 +29,7 @@ bin/harness                       sync and validation
 | `browser`       | `playwright` skill                                    |
 | `architecture`  | Follow ADRs, `rs-architecture-decision` skill         |
 | `development`   | Spec, UI design, plan, task loop, gate and plan runs  |
+| `validation`    | Build, analysis and test gate enforced by git hooks   |
 
 ## Use in a project
 
@@ -47,6 +49,19 @@ Always writes a managed block into the project's `AGENTS.md`. Everything outside
 Default `--targets agents,claude`. Use `claude-plugin` instead of `claude` to stop copying and track this repo live.
 
 `.harness.json` records bundles, targets, source commit and a hash per file. Files changed in the project are skipped on resync unless `--force`.
+
+## Validation gate
+
+The `validation` bundle syncs `.githooks/` and sets `core.hooksPath` to it, unless the project already uses another hooks path. The hooks run the commands in `.agents/validation.json`, which the project owns:
+
+```json
+{
+  "commit": ["dotnet build -warnaserror", "dotnet format --verify-no-changes", "dotnet test"],
+  "push": ["dotnet test --filter Category=Slow"]
+}
+```
+
+`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
 
 ## Global
 

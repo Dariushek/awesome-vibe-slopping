@@ -46,6 +46,11 @@
       "name": "development",
       "source": "./plugins/development",
       "description": "Development loop: spec, UI design, plan, tasks, validation gate and automated plan runs."
+    },
+    {
+      "name": "validation",
+      "source": "./plugins/validation",
+      "description": "Validation gate: project config enforced by git hooks."
     }
   ]
 }

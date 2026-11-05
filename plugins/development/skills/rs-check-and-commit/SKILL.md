@@ -7,7 +7,15 @@ description: Run the project's validation gate, fix failures and commit when it 
 
 ## Steps
 
-1. Read the commands under `## Validation` in the project's AGENTS.md. If the section is missing, derive the commands from the project, such as the solution file, package.json scripts or pyproject.toml. Propose them to the user and, once approved, add the section outside any generated block.
+1. Read the commands in `.agents/validation.json`, `commit` first, then `push`. If the file is missing, derive the commands from the project, such as the solution file, package.json scripts or pyproject.toml. Propose them to the user and, once approved, write the file:
+
+   ```json
+   {
+     "commit": ["dotnet build -warnaserror", "dotnet format --verify-no-changes", "dotnet test"],
+     "push": ["dotnet test --filter Category=Slow"]
+   }
+   ```
+
 2. Check `git status` and the diff. Only the intended change belongs in the commit. Never stage or revert unrelated changes.
 3. Review the diff against the project's rules, ADRs and, for UI changes, its design system. Fix what breaks them.
 4. Run every command in order. A non-zero exit is a failure.
@@ -20,5 +28,5 @@ description: Run the project's validation gate, fix failures and commit when it 
 
 - Never skip a command, swap it for another or report success while one fails.
 - If the same failure survives three fixes, or fixing it needs changes outside the current work, stop and report it.
-- Never use `--no-verify`, amend or force push.
+- Never amend or force push.
 - Push only when the user asks.

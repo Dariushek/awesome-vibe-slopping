@@ -39,6 +39,7 @@ GLOBAL_SKILL_DIRS = {
 }
 
 CLAUDE_KINDS = ("skills", "agents", "commands")
+GIT_HOOKS_DIR = ".githooks"
 FRONTMATTER_FENCE = "---"
 
 
@@ -140,6 +141,7 @@ def plan_files(bundles, targets):
     files = {}
     for name in bundles:
         root = bundle_dir(name)
+        add_tree(files, root / "githooks", GIT_HOOKS_DIR)
         if Target.AGENTS in targets:
             add_tree(files, root / "skills", ".agents/skills")
 
@@ -193,6 +195,8 @@ def write_files(project, files, previous, policy):
 
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(data)
+        if rel.startswith(f"{GIT_HOOKS_DIR}/"):
+            path.chmod(0o755)
         written[rel] = sha(data)
 
     for rel in previous.keys() - files.keys():
@@ -237,6 +241,31 @@ def ensure_import(project):
 
     body = f"{AGENTS_IMPORT}\n\n{text}" if text.strip() else f"{AGENTS_IMPORT}\n"
     path.write_text(body)
+
+
+def git_config(project, *args):
+    return subprocess.run(
+        ["git", "-C", str(project), "config", *args],
+        capture_output=True, text=True,
+    )
+
+
+def point_hooks(project, files):
+    if subprocess.run(["git", "-C", str(project), "rev-parse"], capture_output=True).returncode != 0:
+        if any(rel.startswith(f"{GIT_HOOKS_DIR}/") for rel in files):
+            print(f"skip hooks: {project} is not a git repository")
+        return
+
+    current = git_config(project, "--get", "core.hooksPath").stdout.strip()
+    wanted = any(rel.startswith(f"{GIT_HOOKS_DIR}/") for rel in files)
+    if wanted and not current:
+        git_config(project, "core.hooksPath", GIT_HOOKS_DIR)
+        print(f"Set core.hooksPath to {GIT_HOOKS_DIR}")
+    elif wanted and current != GIT_HOOKS_DIR:
+        print(f"keep core.hooksPath {current}: hooks in {GIT_HOOKS_DIR} not active")
+    elif not wanted and current == GIT_HOOKS_DIR and not (project / GIT_HOOKS_DIR).is_dir():
+        git_config(project, "--unset", "core.hooksPath")
+        print("Unset core.hooksPath")
 
 
 def has_components(name):
@@ -304,6 +333,7 @@ def cmd_sync(args):
         enable_plugins(project, bundles)
 
     files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), overwrite_policy(args))
+    point_hooks(project, files)
     write_json(lock_path, {
         "source": GITHUB_REPO,
         "commit": repo_commit(),
