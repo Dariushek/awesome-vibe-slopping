@@ -13,8 +13,8 @@ If the project has `.agents/overrides/rs-check-and-commit.md`, read it first. Wh
 
    ```json
    {
-     "commit": ["dotnet build -warnaserror", "dotnet format --verify-no-changes", "dotnet test"],
-     "push": ["dotnet test --filter Category=Slow"]
+     "commit": ["<build>", "<static analysis>", "<tests>"],
+     "push": ["<slow tests>"]
    }
    ```
 
