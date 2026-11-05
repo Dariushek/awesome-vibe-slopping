@@ -43,7 +43,7 @@ description: Run all remaining tasks of an approved PLAN.md automatically, in pa
 
 ## End
 
-When every task is `done`, run the full gate once more. Report each task with its commit, anything blocked with the reason, and the gate result. Ask whether to open a pull request.
+When every task is `done`, run the full gate once more. Check that every scenario in the spec has a passing test carrying its ID, and that every non-functional requirement was verified. Report each task with its commit, any scenario or requirement left unverified, anything blocked with the reason, and the gate result. Ask whether to open a pull request.
 
 ## Rules
 

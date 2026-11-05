@@ -32,8 +32,8 @@ description: Split an approved specification into small, well-described tasks in
 
 - Goal: one or two sentences.
 - Files: paths created or changed.
-- Acceptance: which spec criteria it covers, such as AC1.
-- Test: the failing test that proves it.
+- Scenarios: which spec scenarios it makes pass, such as S1, S2.
+- Requirements: which non-functional requirements it satisfies, such as N1.
 - Notes: anything the implementer must know.
 ```
 
@@ -43,6 +43,6 @@ Status is one of `todo`, `in-progress`, `done`, `blocked`.
 
 - One task is one commit, small enough to review in a few minutes.
 - Each task is self-contained. An agent with no chat history must be able to do it from the task and the spec alone.
-- Every acceptance criterion is covered by at least one task.
+- Every scenario in the spec is covered by exactly one task. Every non-functional requirement is covered by at least one task.
 - A task depends on another when it needs that task's code or touches the same files. Tasks with no dependency between them and no shared files can run in parallel, so split along those lines where it is natural.
 - List every file a task touches. rs-run-plan uses `Files` to decide what runs in parallel.
