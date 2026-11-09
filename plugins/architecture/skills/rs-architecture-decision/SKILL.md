@@ -36,6 +36,7 @@ If existing ADRs use another format or naming, follow theirs instead of the temp
 - Date: YYYY-MM-DD
 - Status: Proposed | Accepted | Superseded by [NNNN](NNNN-title.md)
 - Spec: link, if any
+- Enforced by: the automated check, or `review only` with the reason
 
 ## Context
 
@@ -60,3 +61,5 @@ What becomes easier, what becomes harder, what follow-up work it creates.
 - Never rewrite an accepted ADR. To change a decision, write a new ADR and set the old one's status to `Superseded by`.
 - Keep it short. One screen is the target.
 - If the directory has an index such as `README.md`, add the new ADR to it.
+- When an ADR becomes `Accepted` and the project has ARCHITECTURE.md, update the sections it changes and link the ADR. A superseded ADR's links move to the new one.
+- A rule that code can check gets an automated check in the validation gate, written with the user's OK.

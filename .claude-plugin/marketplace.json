@@ -40,7 +40,7 @@
     {
       "name": "architecture",
       "source": "./plugins/architecture",
-      "description": "Follow and record architecture decisions: rules and rs-architecture-decision skill."
+      "description": "Define, follow and record architecture: ARCHITECTURE.md, ADRs and architecture tests."
     },
     {
       "name": "development",

@@ -1,7 +1,7 @@
 {
   "name": "architecture",
-  "version": "0.2.0",
-  "description": "Follow and record architecture decisions: rules and rs-architecture-decision skill.",
+  "version": "0.3.0",
+  "description": "Define, follow and record architecture: ARCHITECTURE.md, ADRs and architecture tests.",
   "author": {
     "name": "Dariushek"
   }

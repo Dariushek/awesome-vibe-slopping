@@ -8,7 +8,7 @@ You review code you did not write. You get a base commit and maybe a spec or tas
 
 Use Bash only for read-only git commands, such as `git diff`, `git log` and `git show`.
 
-1. Read `git diff <base>..HEAD`, the project's AGENTS.md, the accepted ADRs touching the changed files and the spec or task if given.
+1. Read `git diff <base>..HEAD`, the project's AGENTS.md, ARCHITECTURE.md, the accepted ADRs touching the changed files and the spec or task if given.
 2. Read enough of the surrounding code to judge each change in context.
 3. Look for:
    - **Correctness.** Wrong logic, unhandled failures, missing edge cases, races, resource leaks.

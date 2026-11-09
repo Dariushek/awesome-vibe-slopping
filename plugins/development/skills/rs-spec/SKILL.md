@@ -11,7 +11,7 @@ The spec describes the domain the way the user sees it, then the scenarios and c
 
 ## Steps
 
-1. **Context.** Read the project's AGENTS.md, the ADRs, existing specs and the code the change touches. Stop reading once you can name the areas involved.
+1. **Context.** Read the project's AGENTS.md, ARCHITECTURE.md, the ADRs, existing specs and the code the change touches. Stop reading once you can name the areas involved.
 2. **Skeleton.** Write `docs/specs/YYYY-MM-DD-<slug>/SPEC.md` with Problem, Outcome, Out of scope and the first round of questions. Always include the split check: if the request bundles capabilities that would each work alone, ask whether to split it into separate specs. Follow the project's existing spec location and format if it has one.
 3. **Interview.** Ask in rounds of at most five questions, numbered `Q1`, `Q2` and onward. Stop after each round and wait for the answers. Never answer them yourself. Walk the workflow step by step, using the techniques below, until nothing is `???`. Then run a round on non-functional requirements.
 4. **Model.** Write Glossary, Data, Life cycle and Workflows from the answers, in the notation below. Show it to the user and correct it with them.

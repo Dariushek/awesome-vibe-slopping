@@ -27,7 +27,7 @@ bin/harness                       sync and validation
 | `git`           | `commit-message` skill                                |
 | `csharp`        | C# language rules                                     |
 | `browser`       | `playwright` skill                                    |
-| `architecture`  | Follow ADRs, `rs-architecture-decision` skill         |
+| `architecture`  | ARCHITECTURE.md, ADRs, architecture tests             |
 | `development`   | Bug fix, small change, spec, UI, plan, tasks, review  |
 | `validation`    | Build, analysis and test gate enforced by git hooks   |
 
