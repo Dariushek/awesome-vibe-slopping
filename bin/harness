@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from enum import Enum
@@ -27,16 +28,6 @@ BLOCK_BEGIN_LINE = f"{BLOCK_BEGIN} generated from {MARKETPLACE_NAME}, edit there
 BLOCK_END = "<!-- harness:end -->"
 
 GLOBAL_LOCK = Path.home() / ".config" / MARKETPLACE_NAME / "global.json"
-GLOBAL_FILES = {
-    ".claude": "CLAUDE.md",
-    ".codex": "AGENTS.md",
-    ".gemini": "GEMINI.md",
-}
-GLOBAL_SKILL_DIRS = {
-    ".claude": ".claude/skills",
-    ".codex": ".agents/skills",
-    ".config/devin": ".agents/skills",
-}
 
 CLAUDE_KINDS = ("skills", "agents", "commands")
 GIT_HOOKS_DIR = ".githooks"
@@ -155,9 +146,22 @@ def plan_files(bundles, targets):
     return files
 
 
-def plan_global_files(bundles):
+def global_agents():
+    """Installed agents as (config dir, rules file, skills dir relative to home)."""
     home = Path.home()
-    dests = {dest for agent, dest in GLOBAL_SKILL_DIRS.items() if (home / agent).is_dir()}
+    appdata = os.environ.get("APPDATA")
+    devin = Path(appdata) / "devin" if appdata else home / ".config" / "devin"
+    agents = [
+        (home / ".claude", "CLAUDE.md", ".claude/skills"),
+        (home / ".codex", "AGENTS.md", ".agents/skills"),
+        (home / ".gemini", "GEMINI.md", None),
+        (devin, "AGENTS.md", ".agents/skills"),
+    ]
+    return [agent for agent in agents if agent[0].is_dir()]
+
+
+def plan_global_files(bundles):
+    dests = {skills for _, _, skills in global_agents() if skills}
 
     files = {}
     for name in bundles:
@@ -350,11 +354,7 @@ def cmd_global(args):
     bundles = pick_bundles(args, lock)
     body = render_rules(bundles)
 
-    for dirname, filename in GLOBAL_FILES.items():
-        agent_dir = Path.home() / dirname
-        if not agent_dir.is_dir():
-            continue
-
+    for agent_dir, filename, _ in global_agents():
         upsert_block(agent_dir / filename, body)
         print(f"Wrote {', '.join(bundles)} into {agent_dir / filename}")
 
