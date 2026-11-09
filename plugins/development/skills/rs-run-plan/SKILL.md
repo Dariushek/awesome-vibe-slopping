@@ -23,7 +23,7 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
    git worktree add -b "$branch-$id" "../$(basename "$PWD")-$id" "$base"
    ```
 
-   Start a subagent in that worktree. Give it the spec path, the plan path and the task ID. Tell it to run rs-implement-task, to leave PLAN.md alone and to report done or blocked with the reason. Install dependencies in the worktree first if the project needs them.
+   Start the rs-task-implementer agent, or any subagent, in that worktree. Give it the worktree path, the spec path, the plan path and the task ID. Tell it to run rs-implement-task, to leave PLAN.md alone and to report done or blocked with the reason. Install dependencies in the worktree first if the project needs them.
 3. **Collect.** For each task that finished, in ID order:
 
    ```sh
@@ -45,7 +45,7 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
 
 ## End
 
-When every task is `done`, run the full gate once more. Check that every scenario in the spec has a passing test carrying its ID, and that every non-functional requirement was verified. Report each task with its commit, any scenario or requirement left unverified, anything blocked with the reason, and the gate result. Ask whether to open a pull request.
+When every task is `done`, run rs-review on the plan branch, then the full gate once more. Check that every scenario in the spec has a passing test carrying its ID, and that every non-functional requirement was verified. Append a `## Run YYYY-MM-DD` section to PLAN.md: each task with its commit, blocked tasks with the reason, the gate result and a link to REVIEW.md. Commit it. Report the same in chat: each task with its commit, the review outcome, any scenario or requirement left unverified, anything blocked with the reason, and the gate result. Ask whether to open a pull request.
 
 ## Rules
 

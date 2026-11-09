@@ -20,7 +20,7 @@ If the project has `.agents/overrides/rs-check-and-commit.md`, read it first. Wh
 
 2. Check `git status` and the diff. Only the intended change belongs in the commit. Never stage or revert unrelated changes.
 3. Review the diff against the project's rules, ADRs and, for UI changes, its design system. Fix what breaks them.
-4. Run every command in order. A non-zero exit is a failure.
+4. Run every command in order. A non-zero exit is a failure. If the rs-gate-runner agent is available, let it run them, so only failures reach you.
 5. On a failure, make the smallest fix, then re-run the failed command and every command after it. Repeat until all pass.
 6. Files changed by a formatter or generator belong to the commit.
 7. Commit with the commit-message skill.

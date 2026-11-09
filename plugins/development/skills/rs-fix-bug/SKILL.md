@@ -14,7 +14,9 @@ If the project has `.agents/overrides/rs-fix-bug.md`, read it first. Where it co
 3. **Root cause.** Read the code without editing it. Name the cause, not the symptom, and the line where it starts.
 4. **Fix.** Make the smallest change that removes the cause. The test turns green and no other test turns red.
 5. **Siblings.** Check whether the same cause breaks anything else nearby. Report findings, fix only with the user's OK.
-6. **Commit.** Run rs-check-and-commit.
+6. **Record.** Write `docs/changes/YYYY-MM-DD-<slug>.md` from the rs-change template, with `Kind: bug` and the Cause filled.
+7. **Commit.** Run rs-check-and-commit. The record goes in the same commit.
+8. **Review.** Run rs-review.
 
 ## Stop and propose rs-spec when
 

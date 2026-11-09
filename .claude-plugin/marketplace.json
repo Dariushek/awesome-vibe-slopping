@@ -45,7 +45,7 @@
     {
       "name": "development",
       "source": "./plugins/development",
-      "description": "Development loop: bug fix, small change, spec, UI design, plan, tasks, validation gate and automated plan runs."
+      "description": "Development loop: bug fix, small change, spec, UI design, plan, tasks, validation gate, review and automated plan runs."
     },
     {
       "name": "validation",

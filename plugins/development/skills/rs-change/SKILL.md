@@ -17,7 +17,40 @@ If the project has `.agents/overrides/rs-change.md`, read it first. Where it con
    Wait for the user's OK.
 3. **Implement.** Scenarios become failing tests first, then the code that makes them pass. For a technical change, the tests are green before and after.
 4. **UI.** If a UI changed, check it with the playwright skill.
-5. **Commit.** Run rs-check-and-commit.
+5. **Record.** Write `docs/changes/YYYY-MM-DD-<slug>.md` from the template below.
+6. **Commit.** Run rs-check-and-commit. The record goes in the same commit.
+7. **Review.** Run rs-review.
+
+## Change record template
+
+```markdown
+# Title
+
+- Date: YYYY-MM-DD
+- Kind: bug | change | spec
+
+## Problem
+
+What was wrong or what was needed, and who noticed.
+
+## Cause
+
+Bugs only: the root cause, with file and line.
+
+## Contract
+
+The scenarios or the "stays the same" list agreed in chat, each with its test name.
+
+## Done
+
+What changed and why this way.
+
+## Review
+
+Filled by rs-review.
+```
+
+For `Kind: spec`, Problem is one line and the rest is a link to the spec folder.
 
 ## Stop and propose rs-spec when
 

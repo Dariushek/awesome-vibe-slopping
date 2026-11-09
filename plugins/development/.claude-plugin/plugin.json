@@ -1,7 +1,7 @@
 {
   "name": "development",
-  "version": "0.6.0",
-  "description": "Development loop: bug fix, small change, spec, UI design, plan, tasks, validation gate and automated plan runs.",
+  "version": "0.10.0",
+  "description": "Development loop: bug fix, small change, spec, UI design, plan, tasks, validation gate, review and automated plan runs.",
   "author": {
     "name": "Dariushek"
   }

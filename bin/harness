@@ -168,10 +168,15 @@ def global_agents():
 def plan_global_files(bundles):
     dests = {skills for _, _, skills in global_agents() if skills}
 
+    claude = (Path.home() / ".claude").is_dir()
+
     files = {}
     for name in bundles:
         for dest in sorted(dests):
             add_tree(files, bundle_dir(name) / "skills", dest)
+
+        if claude:
+            add_tree(files, bundle_dir(name) / "agents", ".claude/agents")
 
     return files
 
@@ -369,7 +374,7 @@ def cmd_global(args):
 
     files = write_files(Path.home(), plan_global_files(bundles), lock.get("files", {}), overwrite_policy(args))
     for rel in sorted({str(Path(rel).parents[-3]) for rel in files}):
-        print(f"Skills in {Path.home() / rel}")
+        print(f"Installed into {Path.home() / rel}")
 
     write_json(GLOBAL_LOCK, {
         "source": GITHUB_REPO,
