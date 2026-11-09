@@ -23,7 +23,7 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
    git worktree add -b "$branch-$id" "../$(basename "$PWD")-$id" "$base"
    ```
 
-   Start the rs-task-implementer agent, or any subagent, in that worktree. Give it the worktree path, the spec path, the plan path and the task ID. Tell it to run rs-implement-task, to leave PLAN.md alone and to report done or blocked with the reason. Install dependencies in the worktree first if the project needs them.
+   Start the rs-task-implementer agent, or any subagent, in that worktree, on the task's model: `small` is the smallest model you can start subagents on, `default` is your own. Give it the worktree path, the spec path, the plan path and the task ID. Tell it to run rs-implement-task, to leave PLAN.md alone and to report done or blocked with the reason. Install dependencies in the worktree first if the project needs them.
 3. **Collect.** For each task that finished, in ID order:
 
    ```sh
@@ -33,9 +33,10 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
    ```
 
    A cherry-pick conflict means the plan missed a dependency: run `git cherry-pick --abort`, mark the task `blocked` and keep its branch for the user.
-4. **Gate.** After a batch of more than one task, run rs-check-and-commit on the combined result.
-5. **Record.** Update the statuses in PLAN.md and commit them, such as `Mark T2 and T3 done`.
-6. Repeat until no task is ready.
+4. **Escalate.** A `small` task that reports blocked or leaves a failing gate runs once more on `default`. Reset its worktree first with `git -C "../$(basename "$PWD")-$id" reset --hard "$base"`. Only a `default` run can mark a task `blocked`.
+5. **Gate.** After a batch of more than one task, run rs-check-and-commit on the combined result.
+6. **Record.** Update the statuses in PLAN.md and commit them, such as `Mark T2 and T3 done`.
+7. Repeat until no task is ready.
 
 ## Stop and report
 
@@ -45,7 +46,7 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
 
 ## End
 
-When every task is `done`, run rs-review on the plan branch, then the full gate once more. Check that every scenario in the spec has a passing test carrying its ID, and that every non-functional requirement was verified. Append a `## Run YYYY-MM-DD` section to PLAN.md: each task with its commit, blocked tasks with the reason, the gate result and a link to REVIEW.md. Commit it. Report the same in chat: each task with its commit, the review outcome, any scenario or requirement left unverified, anything blocked with the reason, and the gate result. Ask whether to open a pull request.
+When every task is `done`, run rs-review on the plan branch, then the full gate once more. Check that every scenario in the spec has a passing test carrying its ID, and that every non-functional requirement was verified. Append a `## Run YYYY-MM-DD` section to PLAN.md: each task with its commit and the model that finished it, escalations, blocked tasks with the reason, the gate result and a link to REVIEW.md. Commit it. Report the same in chat: each task with its commit, the review outcome, any scenario or requirement left unverified, anything blocked with the reason, and the gate result. Ask whether to open a pull request.
 
 ## Rules
 
