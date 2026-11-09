@@ -16,7 +16,7 @@ The spec describes the domain the way the user sees it, then the scenarios and c
 3. **Interview.** Ask in rounds of at most five questions, numbered `Q1`, `Q2` and onward. Stop after each round and wait for the answers. Never answer them yourself. Walk the workflow step by step, using the techniques below, until nothing is `???`. Then run a round on non-functional requirements.
 4. **Model.** Write Glossary, Data, Life cycle and Workflows from the answers, in the notation below. Show it to the user and correct it with them.
 5. **Scenarios, checks and requirements.** Derive scenarios from the workflows and constraints, write checks for technical outcomes without business behavior, and write the non-functional requirements. Give each a verification method. Show them to the user.
-6. **Design.** Add the technical part: approach, affected areas, failures, architecture decisions.
+6. **Design.** Add the technical part: approach, affected areas, failures, architecture decisions. If the change adds or changes an external system, container or component, include the changed C4 diagram from ARCHITECTURE.md.
 7. **Review.** Hand the spec path, and nothing else, to the rs-spec-reviewer agent, or any fresh subagent with the checklist below. If you cannot run subagents, apply the checklist yourself, line by line. Fix every finding.
 8. **Approve.** Iterate until the user approves, then set `Status: Approved`.
 9. **Decisions.** Record each architecture decision with rs-architecture-decision. Decisions the user approved with the spec are `Accepted`. Link the ADRs from the spec.

@@ -7,7 +7,7 @@ description: Define or document how a project is built, its modules, boundaries,
 
 If the project has `.agents/overrides/rs-architecture.md`, read it first. Where it conflicts with this skill, it wins.
 
-ARCHITECTURE.md is the current map of how the project is built. ADRs say why. Architecture tests make the rules hard.
+ARCHITECTURE.md is the current map of how the project is built, with C4 diagrams for levels 1 to 3: context, containers and components. ADRs say why. Architecture tests make the rules hard.
 
 ## Steps
 
@@ -15,7 +15,7 @@ ARCHITECTURE.md is the current map of how the project is built. ADRs say why. Ar
 2. **Draft.** For existing code, write the map as the code shows it and mark every guess `???`. For a new project, start empty.
 3. **Interview.** Ask in rounds of at most five questions, numbered `Q1` and onward, using the topics below. Stop after each round and wait for the answers. Never answer them yourself. The user may answer that a topic does not apply; write `Not applicable` under it. Where the code breaks a rule the user wants, list the violations; never describe them as the rule.
 4. **Decisions.** Record each decision with rs-architecture-decision, one ADR per decision, `Accepted` when the user confirmed it.
-5. **Map.** Write ARCHITECTURE.md from the template, at the project root unless the project keeps docs elsewhere. Link each rule to its ADR.
+5. **Map.** Write ARCHITECTURE.md from the template, at the project root unless the project keeps docs elsewhere. Draw the diagrams as described below. Link each rule to its ADR.
 6. **Enforcement.** For each rule, propose an automated check: an architecture test library for the stack, a dependency linter, a script. Show the list. With the user's OK, write the checks and add them to the validation gate. Rules no tool can check go under `Checked by review`.
 7. **Existing violations.** If checks fail on the current code, list the violations and ask: fix now, or allowlist each with a reason and a link to a follow-up. Never weaken a rule to make it pass.
 8. **Pointer.** Add to the project's AGENTS.md, outside any generated block:
@@ -30,6 +30,8 @@ ARCHITECTURE.md is the current map of how the project is built. ADRs say why. Ar
 
 ## Interview topics
 
+- **Context.** Who uses the system, which external systems it talks to and why.
+- **Containers.** What gets deployed or run separately: API, web app, database, queue, jobs. Technology and protocol between them.
 - **Style.** One deployable or several? Modular monolith, layered, services?
 - **Modules.** Which parts exist, what each owns: concepts, data, workflows. Use the words from the specs.
 - **Public surface.** What each module exposes: facade, commands, queries, events. What stays internal.
@@ -51,22 +53,60 @@ ARCHITECTURE.md is the current map of how the project is built. ADRs say why. Ar
 
 Modular monolith, one deployable. ([ADR-0001](docs/adr/0001-modular-monolith.md))
 
-## Modules
+## Context
+
+```mermaid
+flowchart LR
+  customer["Customer<br/>[Person]"]
+  staff["Staff<br/>[Person]"]
+  shop["Shop<br/>[Software system]<br/>Takes and bills orders"]
+  payments["Payment provider<br/>[External system]"]
+  customer -->|places orders| shop
+  staff -->|manages catalog| shop
+  shop -->|charges cards, HTTPS| payments
+```
+
+## Containers
+
+```mermaid
+flowchart LR
+  customer["Customer<br/>[Person]"]
+  subgraph shop [Shop]
+    web["Web app<br/>[Container: SPA]"]
+    api["API<br/>[Container: REST]"]
+    db[("Database<br/>[Container: relational]")]
+  end
+  payments["Payment provider<br/>[External system]"]
+  customer --> web
+  web -->|JSON over HTTPS| api
+  api -->|reads, writes| db
+  api -->|charges| payments
+```
+
+## Components
+
+### API
+
+```mermaid
+flowchart LR
+  subgraph api [API]
+    endpoints["Endpoints<br/>[Component]"]
+    orders["Orders<br/>[Module]"]
+    billing["Billing<br/>[Module]"]
+    catalog["Catalog<br/>[Module]"]
+  end
+  endpoints -->|facade| orders
+  endpoints -->|facade| billing
+  orders -->|facade| catalog
+  orders -.->|OrderPlaced event| billing
+```
 
 | Module  | Owns                          | Public surface        |
 |---------|-------------------------------|-----------------------|
 | Orders  | orders, order lines, statuses | OrdersFacade, events  |
 | Billing | invoices, payments            | BillingFacade         |
 
-## Dependencies
-
-```
-Api -> module facades
-Orders -> Catalog facade
-Billing -> Orders events
-```
-
-Modules never reference each other's internals or data.
+Only the arrows drawn are allowed. Modules never reference each other's internals or data.
 
 ## Communication
 
@@ -104,6 +144,15 @@ Domain <- Application <- Infrastructure. Domain depends on nothing.
 
 Rules no tool checks, with the reason.
 ````
+
+## Diagrams
+
+- C4 levels 1 to 3 only: context, containers, components. Never classes or code.
+- Mermaid flowcharts, so they render in place and diff as text. Each node says its name, its kind in brackets and, where useful, its technology or responsibility.
+- Label every arrow with what flows and, between containers, how, such as JSON over HTTPS.
+- Solid arrows are calls, dashed arrows are events or messages.
+- One component diagram per container that has modules. At most about 15 nodes per diagram; split if larger.
+- The component diagram is the dependency rule: an arrow not drawn is not allowed.
 
 ## Rules
 
