@@ -51,6 +51,11 @@
       "name": "validation",
       "source": "./plugins/validation",
       "description": "Validation gate: project config enforced by git hooks."
+    },
+    {
+      "name": "docs",
+      "source": "./plugins/docs",
+      "description": "Project documentation: README with what to install and how to run."
     }
   ]
 }

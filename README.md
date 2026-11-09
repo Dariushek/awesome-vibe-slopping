@@ -30,6 +30,7 @@ bin/harness                       sync and validation
 | `architecture`  | ARCHITECTURE.md, ADRs, architecture tests             |
 | `development`   | Bug fix, small change, spec, UI, plan, tasks, review  |
 | `validation`    | Build, analysis and test gate enforced by git hooks   |
+| `docs`          | `rs-readme`: what to install, how to run and test     |
 
 ## Use in a project
 
