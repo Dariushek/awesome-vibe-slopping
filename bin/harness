@@ -146,8 +146,8 @@ def plan_files(bundles, targets):
     return files
 
 
-def global_agents():
-    """Installed agents as (config dir, rules file, skills dir relative to home)."""
+def known_agents():
+    """Agents as (config dir, rules file, skills dir relative to home)."""
     home = Path.home()
     appdata = os.environ.get("APPDATA")
     devin = Path(appdata) / "devin" if appdata else home / ".config" / "devin"
@@ -156,8 +156,13 @@ def global_agents():
         (home / ".codex", "AGENTS.md", ".agents/skills"),
         (home / ".gemini", "GEMINI.md", None),
         (devin, "AGENTS.md", ".agents/skills"),
+        (home / ".devin", "global_rules.md", ".agents/skills"),
     ]
-    return [agent for agent in agents if agent[0].is_dir()]
+    return agents
+
+
+def global_agents():
+    return [agent for agent in known_agents() if agent[0].is_dir()]
 
 
 def plan_global_files(bundles):
@@ -353,12 +358,19 @@ def cmd_global(args):
     lock = read_json(GLOBAL_LOCK)
     bundles = pick_bundles(args, lock)
     body = render_rules(bundles)
+    agents = global_agents()
+    if not agents:
+        checked = "\n  ".join(str(agent_dir) for agent_dir, _, _ in known_agents())
+        sys.exit(f"No agent found. Checked:\n  {checked}")
 
-    for agent_dir, filename, _ in global_agents():
+    for agent_dir, filename, _ in agents:
         upsert_block(agent_dir / filename, body)
         print(f"Wrote {', '.join(bundles)} into {agent_dir / filename}")
 
     files = write_files(Path.home(), plan_global_files(bundles), lock.get("files", {}), overwrite_policy(args))
+    for rel in sorted({str(Path(rel).parents[-3]) for rel in files}):
+        print(f"Skills in {Path.home() / rel}")
+
     write_json(GLOBAL_LOCK, {
         "source": GITHUB_REPO,
         "commit": repo_commit(),

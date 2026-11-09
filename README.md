@@ -74,7 +74,7 @@ bin/harness global communication browser
 bin/harness global                  # later: update from saved bundles
 ```
 
-Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, and Devin's `~/.config/devin/AGENTS.md`, `%APPDATA%\devin\AGENTS.md` on Windows. Skills are copied to `~/.claude/skills/` and, when Codex or Devin is installed, `~/.agents/skills/`. On Windows run `python bin\harness global`. Skills changed outside this repo are skipped unless `--force`.
+Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, Devin CLI's `~/.config/devin/AGENTS.md`, `%APPDATA%\devin\AGENTS.md` on Windows, and Devin desktop's `~/.devin/global_rules.md`. Skills are copied to `~/.claude/skills/` and, when Codex or Devin is installed, `~/.agents/skills/`. On Windows run `python bin\harness global`. Skills changed outside this repo are skipped unless `--force`.
 
 The list you pass replaces the saved one, and skills of dropped bundles are removed. Bundles and file hashes are saved in `~/.config/awesome-vibe-slopping/global.json`. Global bundles apply everywhere, so leave them out of project syncs.
 
