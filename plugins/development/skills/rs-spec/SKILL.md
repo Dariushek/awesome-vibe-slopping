@@ -1,6 +1,6 @@
 ---
 name: rs-spec
-description: Write a feature specification by interviewing the user about the domain, resulting in workflows and test scenarios in natural but precise language. Use when the user asks for a spec, or before a change that touches 3 or more files or needs an architecture decision.
+description: Write a feature specification by interviewing the user about the domain, resulting in workflows and test scenarios in natural but precise language. Use when the user asks for a spec, or for a change that brings new business rules, needs an architecture decision or spans more than one commit.
 ---
 
 # Specification

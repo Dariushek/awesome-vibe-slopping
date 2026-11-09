@@ -1,4 +1,9 @@
 ## Development loop
 
-- A change that touches 3 or more files or needs an architecture decision starts with rs-spec, then rs-ui-design if users see the change, then rs-plan. Then run each task with rs-implement-task, or all of them with rs-run-plan.
-- A smaller change goes straight to code: a failing test first, then the implementation, then rs-check-and-commit.
+Pick the path before writing code:
+
+- Broken behavior: rs-fix-bug.
+- A small, clear change with no new business rules: rs-change.
+- Anything else: rs-spec, then rs-ui-design if users see the change, then rs-plan. Then run each task with rs-implement-task, or all of them with rs-run-plan.
+
+When a light path hits its stop conditions, switch to rs-spec.
