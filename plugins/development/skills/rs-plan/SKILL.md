@@ -37,17 +37,18 @@ If the project has `.agents/overrides/rs-plan.md`, read it first. Where it confl
 - Screens: prototype screens it builds, if any.
 - Scenarios: which spec scenarios it makes pass, such as S1, S2.
 - Requirements: which non-functional requirements it satisfies, such as N1.
+- Checks: which spec checks it satisfies, such as C1.
 - Model: small | default
 - Notes: anything the implementer must know.
 ```
 
-Status is one of `todo`, `in-progress`, `done`, `blocked`.
+Status is one of `todo`, `in-progress`, `verify`, `done`, `blocked`. `verify` means the code is committed and only manual checks are left; it counts as done for dependencies.
 
 ## Rules
 
 - One task is one commit, small enough to review in a few minutes.
 - Each task is self-contained. An agent with no chat history must be able to do it from the task and the spec alone.
-- Every scenario in the spec is covered by exactly one task. Every non-functional requirement is covered by at least one task.
+- Every scenario in the spec is covered by exactly one task. Every non-functional requirement and check is covered by at least one task.
 - A task depends on another when it needs that task's code or touches the same files. Tasks with no dependency between them and no shared files can run in parallel, so split along those lines where it is natural.
 - List every file a task touches. rs-run-plan uses `Files` to decide what runs in parallel.
 - `Model: small` for mechanical work that follows an existing pattern, such as data types, wiring, CRUD, configuration or a UI like existing screens. `Model: default` for logic, concurrency, security, anything spanning several areas, or when unsure.

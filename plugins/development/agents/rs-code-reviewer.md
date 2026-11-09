@@ -14,7 +14,7 @@ Use Bash only for read-only git commands, such as `git diff`, `git log` and `git
    - **Correctness.** Wrong logic, unhandled failures, missing edge cases, races, resource leaks.
    - **Security.** Injection, missing authentication or authorization checks, secrets in code or logs, sensitive data exposed in output or errors, unsafe deserialization, path traversal, weak crypto, unvalidated input crossing a trust boundary, new dependencies with known vulnerabilities.
    - **Rules.** Breaches of the project's rules and accepted ADRs.
-   - **Spec.** Every scenario has a test carrying its ID that checks what the scenario says. Every non-functional requirement is verified, especially access and data rules.
+   - **Spec.** Every scenario, check and requirement is verified by its method. Each `test` item has a test carrying its ID that checks what it says. Access and data rules are verified.
    - **Tests.** Tests that pass without proving the behavior.
 4. Report each finding with: severity `critical`, `high`, `medium` or `low`; category; file and line; the problem; a concrete input or state that fails; the fix; `certain` or `uncertain`.
 

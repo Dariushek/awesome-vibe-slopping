@@ -12,11 +12,11 @@ If the project has `.agents/overrides/rs-implement-task.md`, read it first. Wher
 1. Read the task, the spec, the ADRs that touch its files and the project's AGENTS.md.
 2. Check every task it depends on is `done`. If not, stop and say which.
 3. Set its status to `in-progress`.
-4. Write each of the task's scenarios as an automated test, with the scenario ID in the test name or display name. Keep its values and steps. Run them and confirm they fail for the expected reason.
-5. Implement the smallest change that makes it pass.
-6. If a UI changed, check it in a browser with the playwright skill and compare it with the task's prototype screens.
-7. Confirm every scenario test of the task passes, and verify each of its non-functional requirements the way the spec says.
-8. Set its status to `done` and run rs-check-and-commit. The PLAN.md update goes in the same commit. Add `Task: T<n>` as the last line of the commit body.
+4. Write each of the task's `test` scenarios as an automated test, with the scenario ID in the test name or display name. Keep its values and steps. Run them and confirm they fail for the expected reason.
+5. Implement the smallest change that makes them pass.
+6. Verify every scenario, requirement and check of the task with its method from the spec. A task with `Screens` always gets an agent check: run the app and walk those screens with the playwright skill at phone and desktop widths, against the prototype. Save evidence to `evidence/<ID>-<name>.png` next to the spec.
+7. Set its status to `done`, or `verify` when only `manual` items are left, with their steps under `Notes`. Run rs-check-and-commit. The PLAN.md update goes in the same commit. Add `Task: T<n>` as the last line of the commit body.
+8. Report a verification line per item: ID, method, result, evidence such as a test name, command result or screenshot path.
 
 ## When blocked
 

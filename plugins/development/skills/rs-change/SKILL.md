@@ -14,9 +14,11 @@ If the project has `.agents/overrides/rs-change.md`, read it first. Where it con
    - For a user story: 1 to 3 scenarios in Given/When/Then with concrete values.
    - For a technical change: what must stay the same and how that is proven, such as the existing tests or a build.
 
+   Each item gets a verification method from rs-spec: `test` by default, `command`, `agent check` or `manual` with a reason.
+
    Wait for the user's OK.
-3. **Implement.** Scenarios become failing tests first, then the code that makes them pass. For a technical change, the tests are green before and after.
-4. **UI.** If a UI changed, check it with the playwright skill.
+3. **Implement.** `test` items become failing tests first, then the code that makes them pass. For a technical change, the tests are green before and after.
+4. **Verify.** Every item by its method. A UI change always gets an agent check with the playwright skill. Ask the user to confirm `manual` items.
 5. **Record.** Write `docs/changes/YYYY-MM-DD-<slug>.md` from the template below.
 6. **Commit.** Run rs-check-and-commit. The record goes in the same commit.
 7. **Review.** Run rs-review.
@@ -44,6 +46,12 @@ The scenarios or the "stays the same" list agreed in chat, each with its test na
 ## Done
 
 What changed and why this way.
+
+## Verification
+
+| ID | Method | Result | Evidence |
+|----|--------|--------|----------|
+| S1 | test | pass | OrderTests.S1_valid_order_is_placed |
 
 ## Review
 

@@ -7,7 +7,7 @@ description: Write a feature specification by interviewing the user about the do
 
 If the project has `.agents/overrides/rs-spec.md`, read it first. Where it conflicts with this skill, it wins.
 
-The spec describes the domain the way the user sees it, then the scenarios that prove the feature works. Scenarios become automated tests, one or more per scenario.
+The spec describes the domain the way the user sees it, then the scenarios and checks that prove the feature works. Each one says how it is verified, an automated test by default.
 
 ## Steps
 
@@ -15,7 +15,7 @@ The spec describes the domain the way the user sees it, then the scenarios that 
 2. **Skeleton.** Write `docs/specs/YYYY-MM-DD-<slug>/SPEC.md` with Problem, Outcome, Out of scope and the first round of questions. Always include the split check: if the request bundles capabilities that would each work alone, ask whether to split it into separate specs. Follow the project's existing spec location and format if it has one.
 3. **Interview.** Ask in rounds of at most five questions, numbered `Q1`, `Q2` and onward. Stop after each round and wait for the answers. Never answer them yourself. Walk the workflow step by step, using the techniques below, until nothing is `???`. Then run a round on non-functional requirements.
 4. **Model.** Write Glossary, Data, Life cycle and Workflows from the answers, in the notation below. Show it to the user and correct it with them.
-5. **Scenarios and requirements.** Derive scenarios from the workflows and constraints, and write the non-functional requirements. Show them to the user.
+5. **Scenarios, checks and requirements.** Derive scenarios from the workflows and constraints, write checks for technical outcomes without business behavior, and write the non-functional requirements. Give each a verification method. Show them to the user.
 6. **Design.** Add the technical part: approach, affected areas, failures, architecture decisions.
 7. **Review.** Hand the spec path, and nothing else, to the rs-spec-reviewer agent, or any fresh subagent with the checklist below. If you cannot run subagents, apply the checklist yourself, line by line. Fix every finding.
 8. **Approve.** Iterate until the user approves, then set `Status: Approved`.
@@ -127,6 +127,18 @@ When a customer orders 1001 of W1234
 Then the order goes to the invalid orders pile
 And the reason is that the quantity is above 1000
 
+### S3. Invoice prints on one page
+
+Given an order with 12 lines
+When staff prints its invoice
+Then all 12 lines fit on one A4 page
+Verified by: manual. Print to PDF, open it, count pages. Reason: print layout depends on the printer driver.
+
+## Checks
+
+- C1: The app builds and starts on the new runtime with no warnings. Verified by: command `<build>` and `<start>`.
+- C2: The order list loads with the new data access layer and shows the same orders as before. Verified by: agent check, compare screenshots before and after.
+
 ## Non-functional requirements
 
 - N1: Placing an order responds within 1 s for 95% of requests at 50 orders per minute. Verified by: load test.
@@ -146,6 +158,21 @@ Technical failures, such as an unavailable dependency, and what the user sees.
 Each decision, with a link to its ADR once written.
 ````
 
+## Verification
+
+Every scenario, check and non-functional requirement has one method. A scenario without a `Verified by` line uses `test`.
+
+| Method | Meaning | Done by |
+|--------|---------|---------|
+| `test` | An automated test carrying the ID | agent |
+| `command` | A command and its expected result, such as a build, migration dry run, analyzer or benchmark | agent |
+| `agent check` | The agent runs the app and checks by hand, with the playwright skill for UI, and saves evidence to `evidence/` next to the spec | agent |
+| `manual` | Steps and the expected result for a human | user |
+
+Prefer them in that order. Anything other than `test` gives its reason, such as an external system, a visual judgment or a one-off migration. Every scenario a user sees on screen also gets an agent check.
+
+Technical work without business behavior has Checks instead of Scenarios; write `Not applicable` under Scenarios, Glossary, Data, Life cycle and Workflows.
+
 ## Writing scenarios
 
 - One scenario per path through each workflow: the main path and every branch that ends differently.
@@ -162,6 +189,7 @@ Each decision, with a link to its ADR once written.
 - **Every path covered.** Each workflow branch and outcome has a scenario.
 - **Every constraint covered.** Each bound has boundary scenarios.
 - **Scenarios testable.** Concrete values, one behavior each, an observable result.
+- **Verification fits.** Every scenario, check and requirement has a method. Anything but `test` has a reason, and `manual` has steps and an expected result.
 - **Non-functional asked and measurable.** Each applicable question was asked, each requirement has a number or checkable statement and says how it is verified.
 - **Failures.** Every dependency and long-running step has a failure with user-visible behavior.
 - **Reversible.** Every state change has a way back.

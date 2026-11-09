@@ -10,7 +10,7 @@ If the project has `.agents/overrides/rs-fix-bug.md`, read it first. Where it co
 ## Steps
 
 1. **Understand.** Restate the bug in one sentence: what happens, what should happen, where. Ask if the expected behavior is unclear.
-2. **Reproduce.** Write a failing automated test that shows the bug. For a UI bug that cannot be tested directly, reproduce it with the playwright skill first, then capture it in a test. If it does not reproduce, stop and report what you tried.
+2. **Reproduce.** Write a failing automated test that shows the bug. For a UI bug that cannot be tested directly, reproduce it with the playwright skill first, then capture it in a test. If it does not reproduce, stop and report what you tried. If no test can capture it, agree another verification method from rs-spec with the user.
 3. **Root cause.** Read the code without editing it. Name the cause, not the symptom, and the line where it starts.
 4. **Fix.** Make the smallest change that removes the cause. The test turns green and no other test turns red.
 5. **Siblings.** Check whether the same cause breaks anything else nearby. Report findings, fix only with the user's OK.
