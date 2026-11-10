@@ -18,7 +18,7 @@ A new developer on a clean machine follows the README top to bottom and ends wit
    - configuration examples, such as `.env.example` and settings files, and how secrets are provided;
    - CI workflows, the most reliable source of the real commands;
    - `.agents/validation.json`, ARCHITECTURE.md and the existing README.
-2. **Draft.** Write README.md from the template. Keep sections of an existing README that the template does not cover. Mark anything you cannot derive as `???`.
+2. **Draft.** Write README.md from the template. Purpose rarely shows in code; derive what you can from specs and existing docs and ask the user for the rest. Keep sections of an existing README that the template does not cover. Mark anything you cannot derive as `???`.
 3. **Verify.** Run every command in order, as a newcomer would: setup, run, test. Check the app answers on the documented URLs and ports. Fix the README, never the project, unless the user asks. A command you cannot run, such as one needing cloud credentials, gets marked `Not verified` and goes to the user.
 4. **Ask.** Turn every `???` and `Not verified` into a question. Wait for the answers.
 5. **Finish.** Remove the markers, show the README and commit it when the user approves.
@@ -28,7 +28,14 @@ A new developer on a clean machine follows the README top to bottom and ends wit
 ````markdown
 # Name
 
-One paragraph: what it does and for whom.
+One sentence: what it is.
+
+## Purpose
+
+- What: what it does.
+- For whom: its users and their roles.
+- Problem: what it solves for them and why it matters.
+- Out of scope: what it deliberately does not do.
 
 ## Projects
 
