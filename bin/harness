@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from enum import Enum
@@ -13,6 +14,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parent.parent
 PLUGINS_DIR = REPO / "plugins"
 MARKETPLACE_FILE = REPO / ".claude-plugin" / "marketplace.json"
+README_FILE = REPO / "README.md"
 MARKETPLACE_NAME = "awesome-vibe-slopping"
 GITHUB_REPO = "Dariushek/awesome-vibe-slopping"
 
@@ -27,13 +29,18 @@ BLOCK_BEGIN = "<!-- harness:begin"
 BLOCK_BEGIN_LINE = f"{BLOCK_BEGIN} generated from {MARKETPLACE_NAME}, edit there -->"
 BLOCK_END = "<!-- harness:end -->"
 
-GLOBAL_LOCK = Path.home() / ".config" / MARKETPLACE_NAME / "global.json"
+CONFIG_DIR = Path.home() / ".config" / MARKETPLACE_NAME
+GLOBAL_LOCK = CONFIG_DIR / "global.json"
+PROJECTS_FILE = CONFIG_DIR / "projects.json"
 
 CLAUDE_KINDS = ("skills", "agents", "commands")
 GIT_HOOKS_DIR = ".githooks"
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
 EXCLUSIVE_BUNDLES = [{"architecture", "architecture-light"}]
 FRONTMATTER_FENCE = "---"
+SKILL_REFERENCE = re.compile(r"\brs-[a-z0-9]+(?:-[a-z0-9]+)*\b")
+DIRTY_SUFFIX = "-dirty"
+ENCODING = "utf-8"
 
 
 class Target(str, Enum):
@@ -45,6 +52,17 @@ class Target(str, Enum):
 class Overwrite(Enum):
     KEEP_EDITED = 1
     FORCE = 2
+
+
+class Notice(Enum):
+    PRINT = 1
+    QUIET = 2
+
+
+class Run:
+    """Set once from the command line. A dry run reports changes and writes nothing."""
+
+    dry = False
 
 
 DEFAULT_TARGETS = [Target.AGENTS, Target.CLAUDE]
@@ -67,16 +85,50 @@ def sha(data):
     return hashlib.sha256(data).hexdigest()
 
 
+def read_text(path):
+    return path.read_text(encoding=ENCODING)
+
+
+def put(path, data):
+    """Write text or bytes. Returns whether the file changed."""
+    if isinstance(data, str):
+        data = data.encode(ENCODING)
+
+    if path.is_file() and path.read_bytes() == data:
+        return False
+
+    if Run.dry:
+        print(f"would write {path}")
+        return True
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(data)
+    return True
+
+
+def remove(path):
+    if not path.is_file():
+        return
+
+    if Run.dry:
+        print(f"would remove {path}")
+        return
+
+    path.unlink()
+
+
 def read_json(path):
     if not path.is_file():
         return {}
 
-    return json.loads(path.read_text())
+    try:
+        return json.loads(read_text(path))
+    except ValueError as error:
+        sys.exit(f"{path}: invalid JSON: {error}")
 
 
 def write_json(path, data):
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, indent=2) + "\n")
+    put(path, json.dumps(data, indent=2) + "\n")
 
 
 def repo_commit():
@@ -87,8 +139,16 @@ def repo_commit():
     return result.stdout.strip() or None
 
 
+def source_commit():
+    commit = repo_commit()
+    if commit and commit.endswith(DIRTY_SUFFIX):
+        print(f"warning: {REPO} has uncommitted changes, recorded as {commit}")
+
+    return commit
+
+
 def frontmatter(path):
-    lines = path.read_text().splitlines()
+    lines = read_text(path).splitlines()
     if not lines or lines[0] != FRONTMATTER_FENCE:
         return {}
 
@@ -106,11 +166,35 @@ def frontmatter(path):
     return {}
 
 
+def manifest(name):
+    return read_json(bundle_dir(name) / PLUGIN_MANIFEST)
+
+
+def with_dependencies(bundles, provided, notice):
+    """Bundles plus what they require, unless another install provides it."""
+    result = list(bundles)
+    for name in result:
+        for dependency in manifest(name).get("dependencies", []):
+            if dependency in result or dependency in provided:
+                continue
+
+            if notice is Notice.PRINT:
+                print(f"add {dependency}: required by {name}")
+
+            result.append(dependency)
+
+    return result
+
+
+def has_rules(name):
+    return any((bundle_dir(name) / "rules").glob("*.md"))
+
+
 def render_rules(bundles):
     parts = []
     for name in bundles:
         for rule in sorted((bundle_dir(name) / "rules").glob("*.md")):
-            parts.append(rule.read_text().strip())
+            parts.append(read_text(rule).strip())
 
     return "\n\n".join(parts)
 
@@ -199,19 +283,23 @@ def prune_dirs(project, path):
         parent = parent.parent
 
 
+def is_hook(rel):
+    return rel.startswith(f"{GIT_HOOKS_DIR}/")
+
+
 def write_files(project, files, previous, policy):
     written = {}
     for rel, data in files.items():
         path = project / rel
-        if policy is Overwrite.KEEP_EDITED and is_edited(path, previous.get(rel)):
+        same = path.is_file() and path.read_bytes() == data
+        if not same and policy is Overwrite.KEEP_EDITED and is_edited(path, previous.get(rel)):
             print(f"skip {rel}: changed since last sync, use --force")
             if rel in previous:
                 written[rel] = previous[rel]
             continue
 
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(data)
-        if rel.startswith(f"{GIT_HOOKS_DIR}/"):
+        put(path, data)
+        if is_hook(rel) and path.is_file() and not Run.dry:
             path.chmod(0o755)
         written[rel] = sha(data)
 
@@ -221,42 +309,60 @@ def write_files(project, files, previous, policy):
             print(f"keep {rel}: no longer managed but changed since last sync")
             continue
 
-        path.unlink(missing_ok=True)
-        prune_dirs(project, path)
+        remove(path)
+        if not Run.dry:
+            prune_dirs(project, path)
 
     return written
 
 
-def upsert_block(path, body):
-    block = f"{BLOCK_BEGIN_LINE}\n{body}\n{BLOCK_END}"
-    text = path.read_text() if path.is_file() else ""
+def block_span(text):
     start = text.find(BLOCK_BEGIN)
     end = text.find(BLOCK_END)
+    if start == -1 or end <= start:
+        return None
 
-    has_block = start != -1 and end > start
+    return start, end + len(BLOCK_END)
+
+
+def read_block(path):
+    text = read_text(path) if path.is_file() else ""
+    span = block_span(text)
+    if not span:
+        return ""
+
+    body = text[span[0]:span[1] - len(BLOCK_END)]
+    return body.partition("\n")[2].strip()
+
+
+def upsert_block(path, body):
+    block = f"{BLOCK_BEGIN_LINE}\n{body}\n{BLOCK_END}"
+    text = read_text(path) if path.is_file() else ""
+    span = block_span(text)
+
     if not body:
-        if has_block:
-            path.write_text(text[:start].rstrip() + "\n" + text[end + len(BLOCK_END):].lstrip("\n"))
+        if span:
+            put(path, (text[:span[0]].rstrip() + "\n" + text[span[1]:].lstrip("\n")).lstrip("\n"))
         return
 
-    if has_block:
-        text = text[:start] + block + text[end + len(BLOCK_END):]
+    if span:
+        text = text[:span[0]] + block + text[span[1]:]
     elif text.strip():
         text = f"{text.rstrip()}\n\n{block}\n"
     else:
         text = f"{block}\n"
 
-    path.write_text(text)
+    put(path, text)
 
 
 def ensure_import(project):
     path = project / CLAUDE_FILE
-    text = path.read_text() if path.is_file() else ""
+    text = read_text(path) if path.is_file() else ""
     if any(line.strip() == AGENTS_IMPORT for line in text.splitlines()):
         return
 
     body = f"{AGENTS_IMPORT}\n\n{text}" if text.strip() else f"{AGENTS_IMPORT}\n"
-    path.write_text(body)
+    put(path, body)
 
 
 def git_config(project, *args):
@@ -267,16 +373,17 @@ def git_config(project, *args):
 
 
 def point_hooks(project, files):
+    wanted = any(is_hook(rel) for rel in files)
     if subprocess.run(["git", "-C", str(project), "rev-parse"], capture_output=True).returncode != 0:
-        if any(rel.startswith(f"{GIT_HOOKS_DIR}/") for rel in files):
+        if wanted:
             print(f"skip hooks: {project} is not a git repository")
         return
 
     current = git_config(project, "--get", "core.hooksPath").stdout.strip()
-    wanted = any(rel.startswith(f"{GIT_HOOKS_DIR}/") for rel in files)
     if wanted and not current:
-        git_config(project, "core.hooksPath", GIT_HOOKS_DIR)
-        print(f"Set core.hooksPath to {GIT_HOOKS_DIR}")
+        if not Run.dry:
+            git_config(project, "core.hooksPath", GIT_HOOKS_DIR)
+        print(f"{'Would set' if Run.dry else 'Set'} core.hooksPath to {GIT_HOOKS_DIR}")
     elif wanted and current != GIT_HOOKS_DIR:
         print(f"keep core.hooksPath {current}: hooks in {GIT_HOOKS_DIR} not active")
     elif not wanted and current == GIT_HOOKS_DIR and not (project / GIT_HOOKS_DIR).is_dir():
@@ -293,8 +400,11 @@ def has_components(name):
 def enable_plugins(project, bundles):
     path = project / CLAUDE_SETTINGS
     settings = read_json(path)
-    marketplaces = settings.setdefault("extraKnownMarketplaces", {})
-    marketplaces[MARKETPLACE_NAME] = {"source": {"source": "github", "repo": GITHUB_REPO}}
+    if not settings and not bundles:
+        return
+
+    marketplaces = settings.get("extraKnownMarketplaces", {})
+    marketplaces.pop(MARKETPLACE_NAME, None)
 
     suffix = f"@{MARKETPLACE_NAME}"
     enabled = {k: v for k, v in settings.get("enabledPlugins", {}).items() if not k.endswith(suffix)}
@@ -302,18 +412,27 @@ def enable_plugins(project, bundles):
         if has_components(name):
             enabled[f"{name}{suffix}"] = True
 
-    settings["enabledPlugins"] = enabled
+    if bundles:
+        marketplaces[MARKETPLACE_NAME] = {"source": {"source": "github", "repo": GITHUB_REPO}}
+
+    for key, value in (("extraKnownMarketplaces", marketplaces), ("enabledPlugins", enabled)):
+        settings[key] = value
+        if not value:
+            del settings[key]
+
     write_json(path, settings)
 
 
-def pick_bundles(args, lock):
-    bundles = args.bundles or lock.get("bundles")
-    if not bundles:
-        sys.exit(f"No bundles given and none saved. Available: {', '.join(bundle_names())}")
-
+def check_exclusive(bundles):
     for group in EXCLUSIVE_BUNDLES:
         if group <= set(bundles):
             sys.exit(f"Pick one of {', '.join(sorted(group))}")
+
+
+def pick_bundles(requested, lock):
+    bundles = requested or lock.get("bundles")
+    if not bundles:
+        sys.exit(f"No bundles given and none saved. Available: {', '.join(bundle_names())}")
 
     return bundles
 
@@ -322,9 +441,8 @@ def overwrite_policy(args):
     return Overwrite.FORCE if args.force else Overwrite.KEEP_EDITED
 
 
-def resolve_sync(args, lock):
-    bundles = pick_bundles(args, lock)
-    raw = args.targets.split(",") if args.targets else lock.get("targets", DEFAULT_TARGETS)
+def pick_targets(requested, lock):
+    raw = requested.split(",") if requested else lock.get("targets", DEFAULT_TARGETS)
     try:
         targets = [Target(t) for t in raw]
     except ValueError as error:
@@ -333,17 +451,40 @@ def resolve_sync(args, lock):
     if Target.CLAUDE in targets and Target.CLAUDE_PLUGIN in targets:
         sys.exit("Pick one of claude and claude-plugin")
 
-    return bundles, targets
+    return targets
 
 
-def cmd_sync(args):
-    project = Path(args.project).resolve()
-    if not project.is_dir():
-        sys.exit(f"Not a directory: {project}")
+def global_bundles():
+    bundles = read_json(GLOBAL_LOCK).get("bundles", [])
+    return with_dependencies(bundles, (), Notice.QUIET)
 
+
+def registered_projects():
+    return read_json(PROJECTS_FILE).get("projects", [])
+
+
+def register(project, present):
+    projects = [p for p in registered_projects() if p != str(project)]
+    if present:
+        projects.append(str(project))
+
+    if projects != registered_projects():
+        write_json(PROJECTS_FILE, {"projects": sorted(projects)})
+
+
+def sync_project(project, requested_bundles, requested_targets, policy):
     lock_path = project / LOCK_FILE
     lock = read_json(lock_path)
-    bundles, targets = resolve_sync(args, lock)
+    requested = pick_bundles(requested_bundles, lock)
+    targets = pick_targets(requested_targets, lock)
+
+    installed_globally = global_bundles()
+    for name in requested:
+        if name in installed_globally and has_rules(name):
+            print(f"warning: {name} is installed globally, its rules will apply twice")
+
+    bundles = with_dependencies(requested, installed_globally, Notice.PRINT)
+    check_exclusive(bundles)
 
     upsert_block(project / AGENTS_FILE, render_rules(bundles))
     if Target.CLAUDE in targets or Target.CLAUDE_PLUGIN in targets:
@@ -352,21 +493,50 @@ def cmd_sync(args):
     if Target.CLAUDE_PLUGIN in targets:
         enable_plugins(project, bundles)
 
-    files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), overwrite_policy(args))
+    files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), policy)
     point_hooks(project, files)
     write_json(lock_path, {
         "source": GITHUB_REPO,
-        "commit": repo_commit(),
-        "bundles": bundles,
+        "commit": source_commit(),
+        "bundles": requested,
         "targets": [t.value for t in targets],
         "files": files,
     })
-    print(f"Synced {', '.join(bundles)} into {project}")
+    register(project, present=True)
+    print(f"{'Would sync' if Run.dry else 'Synced'} {', '.join(bundles)} into {project}")
+
+
+def cmd_sync(args):
+    policy = overwrite_policy(args)
+    if not args.all:
+        if not args.project:
+            sys.exit("Give a project or --all")
+
+        project = Path(args.project).resolve()
+        if not project.is_dir():
+            sys.exit(f"Not a directory: {project}")
+
+        sync_project(project, args.bundles, args.targets, policy)
+        return
+
+    if args.project:
+        sys.exit("--all takes no project or bundles")
+
+    for name in registered_projects():
+        project = Path(name)
+        if not (project / LOCK_FILE).is_file():
+            print(f"forget {project}: no {LOCK_FILE}")
+            register(project, present=False)
+            continue
+
+        sync_project(project, None, args.targets, policy)
 
 
 def cmd_global(args):
     lock = read_json(GLOBAL_LOCK)
-    bundles = pick_bundles(args, lock)
+    requested = pick_bundles(args.bundles, lock)
+    bundles = with_dependencies(requested, (), Notice.PRINT)
+    check_exclusive(bundles)
     body = render_rules(bundles)
     agents = global_agents()
     if not agents:
@@ -375,24 +545,116 @@ def cmd_global(args):
 
     for agent_dir, filename, _ in agents:
         upsert_block(agent_dir / filename, body)
-        print(f"Wrote {', '.join(bundles)} into {agent_dir / filename}")
+        print(f"{'Would write' if Run.dry else 'Wrote'} {', '.join(bundles)} into {agent_dir / filename}")
 
     files = write_files(Path.home(), plan_global_files(bundles), lock.get("files", {}), overwrite_policy(args))
     for rel in sorted({str(Path(rel).parents[-3]) for rel in files}):
-        print(f"Installed into {Path.home() / rel}")
+        print(f"{'Would install' if Run.dry else 'Installed'} into {Path.home() / rel}")
 
     write_json(GLOBAL_LOCK, {
         "source": GITHUB_REPO,
-        "commit": repo_commit(),
-        "bundles": bundles,
+        "commit": source_commit(),
+        "bundles": requested,
         "files": files,
     })
 
 
+def remove_project(project, policy):
+    lock_path = project / LOCK_FILE
+    lock = read_json(lock_path)
+    if not lock:
+        sys.exit(f"Not synced: {project}")
+
+    upsert_block(project / AGENTS_FILE, "")
+    if Target.CLAUDE_PLUGIN.value in lock.get("targets", []):
+        enable_plugins(project, [])
+
+    write_files(project, {}, lock.get("files", {}), policy)
+    point_hooks(project, {})
+    remove(lock_path)
+    register(project, present=False)
+    print(f"{'Would remove' if Run.dry else 'Removed'} the harness from {project}")
+
+
+def remove_global(policy):
+    lock = read_json(GLOBAL_LOCK)
+    if not lock:
+        sys.exit("Nothing installed globally")
+
+    for agent_dir, filename, _ in global_agents():
+        upsert_block(agent_dir / filename, "")
+
+    write_files(Path.home(), {}, lock.get("files", {}), policy)
+    remove(GLOBAL_LOCK)
+    print(f"{'Would remove' if Run.dry else 'Removed'} the global harness")
+
+
+def cmd_remove(args):
+    policy = overwrite_policy(args)
+    if args.is_global == bool(args.project):
+        sys.exit("Give a project or --global")
+
+    if args.is_global:
+        remove_global(policy)
+        return
+
+    remove_project(Path(args.project).resolve(), policy)
+
+
+def print_status(title, root, lock, planned, rules_paths, rules):
+    previous = lock.get("files", {})
+    outdated = [str(path) for path in rules_paths if read_block(path) != rules]
+    outdated += sorted(rel for rel, data in planned.items() if sha(data) != previous.get(rel))
+    outdated += sorted(previous.keys() - planned.keys())
+    edited = sorted(rel for rel, digest in previous.items() if is_edited(root / rel, digest))
+    missing = sorted(rel for rel in previous if not (root / rel).is_file())
+
+    print(title)
+    print(f"  bundles: {', '.join(lock.get('bundles', []))}")
+    print(f"  synced at {lock.get('commit')}, source now {repo_commit()}")
+    for label, items in (("outdated", outdated), ("edited locally", edited), ("missing", missing)):
+        for item in items:
+            print(f"  {label}: {item}")
+
+    if not outdated and not edited and not missing:
+        print("  up to date")
+
+
+def project_status(project):
+    lock = read_json(project / LOCK_FILE)
+    if not lock:
+        print(f"{project}\n  not synced")
+        return
+
+    bundles = with_dependencies(lock.get("bundles", []), global_bundles(), Notice.QUIET)
+    targets = pick_targets(None, lock)
+    planned = plan_files(bundles, targets)
+    print_status(str(project), project, lock, planned, [project / AGENTS_FILE], render_rules(bundles))
+
+
+def global_status():
+    lock = read_json(GLOBAL_LOCK)
+    if not lock:
+        return
+
+    bundles = global_bundles()
+    rules_paths = [agent_dir / filename for agent_dir, filename, _ in global_agents()]
+    print_status("global", Path.home(), lock, plan_global_files(bundles), rules_paths, render_rules(bundles))
+
+
+def cmd_status(args):
+    if args.project:
+        project_status(Path(args.project).resolve())
+        return
+
+    global_status()
+    for name in registered_projects():
+        project_status(Path(name))
+
+
 def cmd_list(_args):
     for name in bundle_names():
-        manifest = read_json(bundle_dir(name) / PLUGIN_MANIFEST)
-        print(f"{name:16} {manifest.get('description', '')}")
+        print(f"{name:20} {manifest(name).get('description', '')}")
 
 
 def check_named(path, expected, problems):
@@ -404,38 +666,99 @@ def check_named(path, expected, problems):
         problems.append(f"{path}: frontmatter description missing")
 
 
-def check_bundle(name, problems):
+def version_at_head(name):
+    result = subprocess.run(
+        ["git", "-C", str(REPO), "show", f"HEAD:plugins/{name}/{PLUGIN_MANIFEST.as_posix()}"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        return None
+
+    try:
+        return json.loads(result.stdout).get("version")
+    except ValueError:
+        return None
+
+
+def has_uncommitted_changes(name):
+    result = subprocess.run(
+        ["git", "-C", str(REPO), "status", "--porcelain", "--", f"plugins/{name}"],
+        capture_output=True, text=True,
+    )
+    return bool(result.stdout.strip())
+
+
+def check_version(name, problems):
+    committed = version_at_head(name)
+    if committed is None or not has_uncommitted_changes(name):
+        return
+
+    if manifest(name).get("version") == committed:
+        problems.append(f"plugins/{name}: changed since the last commit, bump version {committed}")
+
+
+def check_references(root, known, problems):
+    for path in sorted(root.rglob("*.md")):
+        for reference in sorted(set(SKILL_REFERENCE.findall(read_text(path))) - known):
+            problems.append(f"{path}: {reference} is no skill or agent")
+
+
+def check_bundle(name, names, skills, agents, problems):
     root = PLUGINS_DIR / name
-    manifest = read_json(root / PLUGIN_MANIFEST)
-    if manifest.get("name") != name:
+    dependencies = manifest(name).get("dependencies", [])
+    if manifest(name).get("name") != name:
         problems.append(f"{root / PLUGIN_MANIFEST}: name must be {name}")
+
+    for dependency in dependencies:
+        if dependency not in names or dependency == name:
+            problems.append(f"{root / PLUGIN_MANIFEST}: dependency {dependency} is no other bundle")
 
     for skill in sorted((root / "skills").glob("*/")):
         check_named(skill / "SKILL.md", skill.name, problems)
-        if OVERRIDE_PATH.format(name=skill.name) not in (skill / "SKILL.md").read_text():
+        if OVERRIDE_PATH.format(name=skill.name) not in read_text(skill / "SKILL.md"):
             problems.append(f"{skill / 'SKILL.md'}: must point to {OVERRIDE_PATH.format(name=skill.name)}")
 
     for agent in sorted((root / "agents").glob("*.md")):
         check_named(agent, agent.stem, problems)
+        preloaded = frontmatter(agent).get("skills", "")
+        for skill in (s.strip() for s in preloaded.split(",") if s.strip()):
+            if skill not in skills:
+                problems.append(f"{agent}: preloads unknown skill {skill}")
 
     for rule in sorted((root / "rules").glob("*.md")):
-        if not rule.read_text().startswith("## "):
+        if not read_text(rule).startswith("## "):
             problems.append(f"{rule}: must start with a ## heading")
+
+    check_references(root, skills | agents, problems)
+    check_version(name, problems)
+
+
+def check_marketplace(names, problems):
+    listed = {p["name"]: p for p in read_json(MARKETPLACE_FILE).get("plugins", [])}
+    readme = read_text(README_FILE)
+    for name in names:
+        entry = listed.get(name, {})
+        if entry.get("source") != f"./plugins/{name}":
+            problems.append(f"{MARKETPLACE_FILE}: {name} missing or wrong source")
+        elif entry.get("description") != manifest(name).get("description"):
+            problems.append(f"{MARKETPLACE_FILE}: {name} description differs from its plugin.json")
+
+        if f"`{name}`" not in readme:
+            problems.append(f"{README_FILE}: {name} is not in the bundle table")
+
+    for name in listed.keys() - set(names):
+        problems.append(f"{MARKETPLACE_FILE}: {name} has no plugin directory")
 
 
 def cmd_check(_args):
     problems = []
     names = bundle_names()
+    skills = {p.parent.name for p in PLUGINS_DIR.glob("*/skills/*/SKILL.md")}
+    agents = {p.stem for p in PLUGINS_DIR.glob("*/agents/*.md")}
     for name in names:
-        check_bundle(name, problems)
+        check_bundle(name, names, skills, agents, problems)
 
-    listed = {p["name"]: p["source"] for p in read_json(MARKETPLACE_FILE).get("plugins", [])}
-    for name in names:
-        if listed.get(name) != f"./plugins/{name}":
-            problems.append(f"{MARKETPLACE_FILE}: {name} missing or wrong source")
-
-    for name in listed.keys() - set(names):
-        problems.append(f"{MARKETPLACE_FILE}: {name} has no plugin directory")
+    check_marketplace(names, problems)
 
     for problem in problems:
         print(problem)
@@ -446,7 +769,12 @@ def cmd_check(_args):
     print("OK")
 
 
-def main():
+def add_write_flags(parser, force_help):
+    parser.add_argument("--force", action="store_true", help=force_help)
+    parser.add_argument("--dry-run", action="store_true", help="show what would change, write nothing")
+
+
+def main(argv=None):
     parser = argparse.ArgumentParser(prog="harness", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -454,18 +782,30 @@ def main():
     sub.add_parser("check", help="validate this repo").set_defaults(func=cmd_check)
 
     sync = sub.add_parser("sync", help="render bundles into a project")
-    sync.add_argument("project")
+    sync.add_argument("project", nargs="?")
     sync.add_argument("bundles", nargs="*", help=f"defaults to bundles in {LOCK_FILE}")
+    sync.add_argument("--all", action="store_true", help="resync every project synced from this machine")
     sync.add_argument("--targets", help="comma separated: agents, claude, claude-plugin")
-    sync.add_argument("--force", action="store_true", help="overwrite files changed in the project")
+    add_write_flags(sync, "overwrite files changed in the project")
     sync.set_defaults(func=cmd_sync)
 
     glob = sub.add_parser("global", help="render bundle rules and skills into user-level agent config")
     glob.add_argument("bundles", nargs="*", help=f"defaults to bundles saved in {GLOBAL_LOCK}")
-    glob.add_argument("--force", action="store_true", help="overwrite skills changed outside this repo")
+    add_write_flags(glob, "overwrite skills changed outside this repo")
     glob.set_defaults(func=cmd_global)
 
-    args = parser.parse_args()
+    status = sub.add_parser("status", help="show what is synced and what is out of date")
+    status.add_argument("project", nargs="?", help="defaults to global and every synced project")
+    status.set_defaults(func=cmd_status)
+
+    rm = sub.add_parser("remove", help="remove the harness from a project or from user-level config")
+    rm.add_argument("project", nargs="?")
+    rm.add_argument("--global", dest="is_global", action="store_true", help="remove the global install")
+    add_write_flags(rm, "also remove files changed since the last sync")
+    rm.set_defaults(func=cmd_remove)
+
+    args = parser.parse_args(argv)
+    Run.dry = getattr(args, "dry_run", False)
     args.func(args)
 
 

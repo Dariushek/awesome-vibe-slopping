@@ -13,17 +13,19 @@ Use Playwright for all browser work. Use another browser tool only if the user a
 
 If the project has a `playwright.config.*` or a Playwright dependency, use it through the project's own runner. Never add a second installation.
 
-Otherwise work outside the project and add nothing to it:
+Otherwise work outside the project and add nothing to it. Install once into a shared cache and give each run its own directory under it, so scripts find the install and never collide:
 
 ```sh
-dir=$(mktemp -d) && cd "$dir"
-npm i @playwright/test
+base="${XDG_CACHE_HOME:-$HOME/.cache}/agent-playwright"
+mkdir -p "$base" && cd "$base"
+[ -d node_modules/@playwright/test ] || npm i @playwright/test
 npx playwright install chromium
+dir=$(mktemp -d "$base/run-XXXXXX") && cd "$dir"
 ```
 
 ## Drive
 
-Write a throwaway script in that directory, never in a test directory. Run it with `node`.
+Write a throwaway script in the run directory, never in a test directory. Run it with `node`.
 
 ```js
 const { chromium, expect } = require('@playwright/test');

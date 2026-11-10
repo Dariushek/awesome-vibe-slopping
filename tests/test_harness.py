@@ -1,0 +1,306 @@
+"""Tests for bin/harness and the validation hook. Standard library only."""
+
+import contextlib
+import io
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import unittest
+from importlib.machinery import SourceFileLoader
+from importlib.util import module_from_spec, spec_from_loader
+from pathlib import Path
+
+REPO = Path(__file__).resolve().parent.parent
+VALIDATE = REPO / "plugins" / "validation" / "githooks" / "validate"
+
+# The harness resolves user-level paths at import, so point home at a sandbox first.
+HOME = tempfile.TemporaryDirectory()
+os.environ["HOME"] = HOME.name
+os.environ["USERPROFILE"] = HOME.name
+os.environ.pop("APPDATA", None)
+
+# Git exports GIT_DIR and friends to hooks. Drop them, or the tests would act on this repo.
+for name in [n for n in os.environ if n.startswith("GIT_")]:
+    del os.environ[name]
+
+loader = SourceFileLoader("harness", str(REPO / "bin" / "harness"))
+harness = module_from_spec(spec_from_loader("harness", loader))
+loader.exec_module(harness)
+
+
+def run(*argv):
+    """Run a harness command, return its output and exit code."""
+    out = io.StringIO()
+    code = 0
+    with contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
+        try:
+            harness.main(list(argv))
+        except SystemExit as error:
+            code = error.code
+            if isinstance(code, str):
+                out.write(code)
+
+    return out.getvalue(), code
+
+
+def git(cwd, *args):
+    subprocess.run(["git", *args], cwd=cwd, check=True, capture_output=True)
+
+
+class ProjectCase(unittest.TestCase):
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.project = Path(tmp.name).resolve()
+        self.addCleanup(self.forget)
+
+    def forget(self):
+        for path in (harness.PROJECTS_FILE, harness.GLOBAL_LOCK):
+            path.unlink(missing_ok=True)
+
+    def lock(self):
+        return json.loads((self.project / harness.LOCK_FILE).read_text())
+
+
+class BlockTest(ProjectCase):
+    def test_block_is_added_after_existing_text(self):
+        path = self.project / "AGENTS.md"
+        path.write_text("# Mine\n")
+
+        harness.upsert_block(path, "## Rules")
+
+        self.assertTrue(path.read_text().startswith("# Mine\n\n<!-- harness:begin"))
+        self.assertEqual(harness.read_block(path), "## Rules")
+
+    def test_block_is_replaced_in_place(self):
+        path = self.project / "AGENTS.md"
+        path.write_text("# Mine\n")
+        harness.upsert_block(path, "old")
+        path.write_text(path.read_text() + "\ntail\n")
+
+        harness.upsert_block(path, "new")
+
+        text = path.read_text()
+        self.assertEqual(harness.read_block(path), "new")
+        self.assertEqual(text.count(harness.BLOCK_END), 1)
+        self.assertTrue(text.endswith("tail\n"))
+
+    def test_empty_body_removes_block_and_keeps_the_rest(self):
+        path = self.project / "AGENTS.md"
+        path.write_text("# Mine\n")
+        harness.upsert_block(path, "body")
+
+        harness.upsert_block(path, "")
+
+        self.assertEqual(path.read_text(), "# Mine\n")
+
+
+class SyncTest(ProjectCase):
+    def test_sync_writes_rules_skills_and_lock(self):
+        _, code = run("sync", str(self.project), "docs")
+
+        self.assertEqual(code, 0)
+        self.assertIn("## README", (self.project / "AGENTS.md").read_text())
+        self.assertTrue((self.project / ".agents/skills/rs-readme/SKILL.md").is_file())
+        self.assertTrue((self.project / ".claude/skills/rs-readme/SKILL.md").is_file())
+        self.assertEqual((self.project / "CLAUDE.md").read_text(), "@AGENTS.md\n")
+        self.assertEqual(self.lock()["bundles"], ["docs"])
+
+    def test_dependencies_are_added_but_not_saved(self):
+        out, _ = run("sync", str(self.project), "development")
+
+        self.assertIn("add git: required by development", out)
+        self.assertTrue((self.project / ".agents/skills/commit-message/SKILL.md").is_file())
+        self.assertTrue((self.project / ".agents/skills/playwright/SKILL.md").is_file())
+        self.assertEqual(self.lock()["bundles"], ["development"])
+
+    def test_dependency_installed_globally_is_not_copied(self):
+        harness.write_json(harness.GLOBAL_LOCK, {"bundles": ["git", "browser"]})
+
+        out, _ = run("sync", str(self.project), "development")
+
+        self.assertNotIn("required by", out)
+        self.assertFalse((self.project / ".agents/skills/commit-message").exists())
+
+    def test_global_bundle_with_rules_warns(self):
+        harness.write_json(harness.GLOBAL_LOCK, {"bundles": ["coding"]})
+
+        out, _ = run("sync", str(self.project), "coding")
+
+        self.assertIn("warning: coding is installed globally", out)
+
+    def test_exclusive_bundles_are_refused(self):
+        out, code = run("sync", str(self.project), "architecture", "architecture-light")
+
+        self.assertNotEqual(code, 0)
+        self.assertIn("Pick one of", out)
+
+    def test_edited_file_is_kept_unless_forced(self):
+        run("sync", str(self.project), "docs")
+        skill = self.project / ".agents/skills/rs-readme/SKILL.md"
+        original = skill.read_text()
+        skill.write_text("mine")
+
+        out, _ = run("sync", str(self.project))
+        self.assertIn("skip .agents/skills/rs-readme/SKILL.md", out)
+        self.assertEqual(skill.read_text(), "mine")
+
+        run("sync", str(self.project), "--force")
+        self.assertEqual(skill.read_text(), original)
+
+    def test_dropped_bundle_files_are_removed(self):
+        run("sync", str(self.project), "docs", "git")
+
+        run("sync", str(self.project), "git")
+
+        self.assertFalse((self.project / ".agents/skills/rs-readme").exists())
+        self.assertTrue((self.project / ".agents/skills/commit-message/SKILL.md").is_file())
+        self.assertNotIn("## README", (self.project / "AGENTS.md").read_text())
+
+    def test_dry_run_writes_nothing(self):
+        out, code = run("sync", str(self.project), "docs", "--dry-run")
+
+        self.assertEqual(code, 0)
+        self.assertIn("would write", out)
+        self.assertEqual(list(self.project.iterdir()), [])
+        self.assertFalse(harness.PROJECTS_FILE.exists())
+
+    def test_hooks_are_synced_and_activated(self):
+        git(self.project, "init", "-q")
+
+        run("sync", str(self.project), "validation")
+
+        hook = self.project / ".githooks/pre-commit"
+        self.assertTrue(hook.is_file())
+        path = subprocess.run(
+            ["git", "config", "--get", "core.hooksPath"],
+            cwd=self.project, capture_output=True, text=True,
+        ).stdout.strip()
+        self.assertEqual(path, ".githooks")
+
+    def test_sync_all_resyncs_registered_projects(self):
+        run("sync", str(self.project), "docs")
+        skill = self.project / ".agents/skills/rs-readme/SKILL.md"
+        skill.unlink()
+
+        out, _ = run("sync", "--all")
+
+        self.assertIn(f"Synced docs into {self.project}", out)
+        self.assertTrue(skill.is_file())
+
+    def test_status_reports_missing_and_edited(self):
+        run("sync", str(self.project), "docs")
+        out, _ = run("status", str(self.project))
+        self.assertIn("up to date", out)
+
+        (self.project / ".agents/skills/rs-readme/SKILL.md").write_text("mine")
+        (self.project / ".claude/skills/rs-readme/SKILL.md").unlink()
+        out, _ = run("status", str(self.project))
+
+        self.assertIn("edited locally: .agents/skills/rs-readme/SKILL.md", out)
+        self.assertIn("missing: .claude/skills/rs-readme/SKILL.md", out)
+
+    def test_remove_takes_everything_out_but_user_content(self):
+        (self.project / "AGENTS.md").write_text("# Mine\n")
+        run("sync", str(self.project), "docs")
+
+        run("remove", str(self.project))
+
+        self.assertEqual((self.project / "AGENTS.md").read_text(), "# Mine\n")
+        self.assertFalse((self.project / ".agents").exists())
+        self.assertFalse((self.project / harness.LOCK_FILE).exists())
+        self.assertEqual(harness.registered_projects(), [])
+
+
+class GlobalTest(ProjectCase):
+    def setUp(self):
+        super().setUp()
+        self.claude = Path(HOME.name) / ".claude"
+        self.claude.mkdir(exist_ok=True)
+
+    def test_global_installs_and_removes(self):
+        run("global", "communication", "git")
+
+        rules = self.claude / "CLAUDE.md"
+        skill = self.claude / "skills/commit-message/SKILL.md"
+        self.assertIn("## Communication", rules.read_text())
+        self.assertTrue(skill.is_file())
+
+        run("remove", "--global")
+
+        self.assertNotIn("## Communication", rules.read_text())
+        self.assertFalse(skill.exists())
+        self.assertFalse(harness.GLOBAL_LOCK.exists())
+
+
+class CheckTest(unittest.TestCase):
+    def test_repo_passes_its_own_check(self):
+        problems = []
+        names = harness.bundle_names()
+        skills = {p.parent.name for p in harness.PLUGINS_DIR.glob("*/skills/*/SKILL.md")}
+        agents = {p.stem for p in harness.PLUGINS_DIR.glob("*/agents/*.md")}
+        for name in names:
+            harness.check_bundle(name, names, skills, agents, problems)
+        harness.check_marketplace(names, problems)
+
+        self.assertEqual([p for p in problems if "bump version" not in p], [])
+
+    def test_unknown_skill_reference_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            (Path(tmp) / "rule.md").write_text("Run rs-spec, then rs-nonexistent.")
+            problems = []
+
+            harness.check_references(Path(tmp), {"rs-spec"}, problems)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("rs-nonexistent", problems[0])
+
+
+class ValidateHookTest(ProjectCase):
+    def setUp(self):
+        super().setUp()
+        git(self.project, "init", "-q")
+        (self.project / ".agents").mkdir()
+
+    def validate(self, config, stage="commit"):
+        (self.project / ".agents/validation.json").write_text(config)
+        return subprocess.run(
+            [sys.executable, str(VALIDATE), stage],
+            cwd=self.project, capture_output=True, text=True,
+        )
+
+    def command(self, code):
+        return f'"{sys.executable}" -c "import sys; print(\'ran\'); sys.exit({code})"'
+
+    def test_passing_stage_is_skipped_until_the_tree_changes(self):
+        config = json.dumps({"commit": [self.command(0)]})
+
+        self.assertIn("ran", self.validate(config).stdout)
+        self.assertIn("skipped", self.validate(config).stdout)
+
+        (self.project / "new.txt").write_text("x")
+        self.assertIn("ran", self.validate(config).stdout)
+
+    def test_failing_command_fails_the_stage(self):
+        result = self.validate(json.dumps({"commit": [self.command(3)]}))
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("failed", result.stderr)
+
+    def test_string_instead_of_list_is_refused(self):
+        result = self.validate('{"commit": "true"}')
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("must be a list of command strings", result.stderr)
+
+    def test_invalid_json_is_refused(self):
+        result = self.validate("{")
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("invalid JSON", result.stderr)
+
+
+if __name__ == "__main__":
+    unittest.main()

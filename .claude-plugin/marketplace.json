@@ -45,7 +45,7 @@
     {
       "name": "architecture-light",
       "source": "./plugins/architecture-light",
-      "description": "Short architecture rules in AGENTS.md, no ADRs or diagrams."
+      "description": "Short architecture rules in the project's AGENTS.md, without ADRs or diagrams. Use instead of architecture."
     },
     {
       "name": "development",
@@ -55,12 +55,12 @@
     {
       "name": "validation",
       "source": "./plugins/validation",
-      "description": "Validation gate: project config enforced by git hooks."
+      "description": "Validation gate: project config with build, analysis and test commands, enforced by git hooks."
     },
     {
       "name": "docs",
       "source": "./plugins/docs",
-      "description": "Project documentation: README with what to install and how to run."
+      "description": "Project documentation: README with what the project is, what to install and how to run it."
     }
   ]
 }

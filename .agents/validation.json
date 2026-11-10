@@ -1,0 +1,7 @@
+{
+  "commit": [
+    "bin/harness check",
+    "python3 -m unittest discover -s tests",
+    "claude plugin validate ."
+  ]
+}

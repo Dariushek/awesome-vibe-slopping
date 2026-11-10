@@ -1,8 +1,9 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "875d031-dirty",
+  "commit": "b54168f-dirty",
   "bundles": [
-    "git"
+    "git",
+    "validation"
   ],
   "targets": [
     "agents",
@@ -10,6 +11,9 @@
   ],
   "files": {
     ".agents/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54",
-    ".claude/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54"
+    ".claude/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54",
+    ".githooks/pre-commit": "afbf4c4e9d0caba190fd2075d0953730312657d07784248329d52ac8cc2485ad",
+    ".githooks/pre-push": "af5b2fcb1b25aaa51b1a67a1500e92a02a05c110cf5bfd5476286cb0a0b3f6b7",
+    ".githooks/validate": "c140cf476fb6d985632986256a36f2a03912a6427adef7d33106cc6692dae8dd"
   }
 }

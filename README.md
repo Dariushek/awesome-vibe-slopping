@@ -52,6 +52,17 @@ Default `--targets agents,claude`. Use `claude-plugin` instead of `claude` to st
 
 `.harness.json` records bundles, targets, source commit and a hash per file. Files changed in the project are skipped on resync unless `--force`.
 
+A bundle can name the bundles it needs under `dependencies` in its `plugin.json`. Sync adds them, unless they are installed globally.
+
+```sh
+bin/harness sync ~/Projects/Wealfi --dry-run   # show what would change
+bin/harness sync --all                         # resync every project synced from this machine
+bin/harness status                             # global and every project: outdated, edited, missing
+bin/harness remove ~/Projects/Wealfi           # take the harness out again
+```
+
+Projects are remembered in `~/.config/awesome-vibe-slopping/projects.json` from their first sync on.
+
 ## Project overrides
 
 Every skill first reads `.agents/overrides/<skill>.md` from the project when it exists, and that file wins where it conflicts. Use it for project specifics, such as spec location, commit format or extra steps, without forking the skill. Overrides are project files, never synced or overwritten.
@@ -78,18 +89,20 @@ bin/harness global                  # later: update from saved bundles
 
 Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, Devin CLI's `~/.config/devin/AGENTS.md`, `%APPDATA%\devin\AGENTS.md` on Windows, and Devin desktop's `~/.devin/global_rules.md`. Skills are copied to `~/.claude/skills/` and, when Codex or Devin is installed, `~/.agents/skills/`. Agents are copied to `~/.claude/agents/`, the only agent that reads this format. On Windows run `python bin\harness global`. Skills changed outside this repo are skipped unless `--force`.
 
-The list you pass replaces the saved one, and skills of dropped bundles are removed. Bundles and file hashes are saved in `~/.config/awesome-vibe-slopping/global.json`. Global bundles apply everywhere, so leave them out of project syncs.
+The list you pass replaces the saved one, and skills of dropped bundles are removed. Bundles and file hashes are saved in `~/.config/awesome-vibe-slopping/global.json`. Global bundles apply everywhere, so leave them out of project syncs; sync warns when rules would apply twice. `bin/harness remove --global` takes it all out.
 
 Plugin only, without sync:
 
 ```
 /plugin marketplace add Dariushek/awesome-vibe-slopping
-/plugin install engineering@awesome-vibe-slopping
+/plugin install development@awesome-vibe-slopping
 ```
+
+A plugin delivers skills, agents, commands and hooks, never rules. Bundles with rules only, such as `engineering`, need a sync.
 
 ## Change something
 
 1. Edit under `plugins/`. New bundle: add its directory and an entry in `marketplace.json`.
 2. Bump `version` in the bundle's `plugin.json`.
-3. `bin/harness check && claude plugin validate .`
-4. Commit, push, resync projects.
+3. `.githooks/validate all`, which runs `bin/harness check`, the tests and `claude plugin validate .`. The commit hook runs it too.
+4. Commit, push, `bin/harness sync --all`.

@@ -58,7 +58,7 @@ def stamp_path(root):
 
 def read_stamps(path):
     try:
-        return json.loads(path.read_text())
+        return json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, AttributeError):
         return {}
 
@@ -78,6 +78,23 @@ def run_stage(root, name, commands, stamps):
     return True
 
 
+def load_config(path):
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except ValueError as error:
+        sys.exit(f"validate: {CONFIG}: invalid JSON: {error}")
+
+    if not isinstance(config, dict):
+        sys.exit(f"validate: {CONFIG}: must be an object")
+
+    for name in STAGES:
+        commands = config.get(name, [])
+        if not isinstance(commands, list) or not all(isinstance(c, str) for c in commands):
+            sys.exit(f"validate: {CONFIG}: {name} must be a list of command strings")
+
+    return config
+
+
 def main():
     stage = sys.argv[1] if len(sys.argv) > 1 else "all"
     if stage != "all" and stage not in STAGES:
@@ -89,7 +106,7 @@ def main():
         print(f"validate: {CONFIG} missing, nothing checked", file=sys.stderr)
         return 0
 
-    config = json.loads(path.read_text())
+    config = load_config(path)
     stamp_file = stamp_path(root)
     stamps = read_stamps(stamp_file)
     for name in STAGES if stage == "all" else (stage,):
@@ -99,7 +116,7 @@ def main():
 
         passed = run_stage(root, name, commands, stamps)
         if stamp_file and stamps.get(name):
-            stamp_file.write_text(json.dumps(stamps))
+            stamp_file.write_text(json.dumps(stamps), encoding="utf-8")
 
         if not passed:
             return 1
