@@ -67,7 +67,7 @@ The `validation` bundle syncs `.githooks/` and sets `core.hooksPath` to it, unle
 }
 ```
 
-`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
+`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. A stage that already passed on the same working tree is skipped, so a gate run right before the commit is not repeated by the hook. An optional `run` entry, `{"start": "...", "url": "..."}`, tells agents how to start the app for checks. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
 
 ## Global
 

@@ -1,13 +1,22 @@
 #!/usr/bin/env python3
 """Run the project's validation commands for a stage: commit, push or all."""
 
+import hashlib
 import json
+import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 CONFIG = Path(".agents") / "validation.json"
 STAGES = ("commit", "push")
+STAMP_FILE = "harness-validated.json"
+
+
+def git(root, *args, env=None):
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, env=env)
 
 
 def repo_root():
@@ -16,6 +25,57 @@ def repo_root():
         capture_output=True, text=True, check=True,
     )
     return Path(result.stdout.strip())
+
+
+def tree_hash(root):
+    """Tree of the working directory as it is now, untracked files included."""
+    index = git(root, "rev-parse", "--git-path", "index").stdout.strip()
+    with tempfile.TemporaryDirectory() as tmp:
+        scratch = Path(tmp) / "index"
+        if index and (root / index).is_file():
+            shutil.copy(root / index, scratch)
+
+        env = {**os.environ, "GIT_INDEX_FILE": str(scratch)}
+        if git(root, "add", "-A", env=env).returncode != 0:
+            return None
+
+        result = git(root, "write-tree", env=env)
+        return result.stdout.strip() if result.returncode == 0 else None
+
+
+def fingerprint(root, commands):
+    tree = tree_hash(root)
+    if tree is None:
+        return None
+
+    return hashlib.sha256(f"{tree}\n{json.dumps(commands)}".encode()).hexdigest()
+
+
+def stamp_path(root):
+    path = git(root, "rev-parse", "--git-path", STAMP_FILE).stdout.strip()
+    return root / path if path else None
+
+
+def read_stamps(path):
+    try:
+        return json.loads(path.read_text())
+    except (OSError, ValueError, AttributeError):
+        return {}
+
+
+def run_stage(root, name, commands, stamps):
+    if stamps.get(name) and stamps.get(name) == fingerprint(root, commands):
+        print(f"validate {name}: passed on this tree already, skipped", flush=True)
+        return True
+
+    for command in commands:
+        print(f"validate {name}: {command}", flush=True)
+        if subprocess.run(command, shell=True, cwd=root).returncode != 0:
+            print(f"validate: failed: {command}", file=sys.stderr)
+            return False
+
+    stamps[name] = fingerprint(root, commands)
+    return True
 
 
 def main():
@@ -30,12 +90,19 @@ def main():
         return 0
 
     config = json.loads(path.read_text())
+    stamp_file = stamp_path(root)
+    stamps = read_stamps(stamp_file)
     for name in STAGES if stage == "all" else (stage,):
-        for command in config.get(name, []):
-            print(f"validate {name}: {command}", flush=True)
-            if subprocess.run(command, shell=True, cwd=root).returncode != 0:
-                print(f"validate: failed: {command}", file=sys.stderr)
-                return 1
+        commands = config.get(name, [])
+        if not commands:
+            continue
+
+        passed = run_stage(root, name, commands, stamps)
+        if stamp_file and stamps.get(name):
+            stamp_file.write_text(json.dumps(stamps))
+
+        if not passed:
+            return 1
 
     return 0
 

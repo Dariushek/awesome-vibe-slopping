@@ -166,10 +166,12 @@ Every scenario, check and non-functional requirement has one method. A scenario 
 |--------|---------|---------|
 | `test` | An automated test carrying the ID | agent |
 | `command` | A command and its expected result, such as a build, migration dry run, analyzer or benchmark | agent |
-| `agent check` | The agent runs the app and checks by hand, with the playwright skill for UI, and saves evidence to `evidence/` next to the spec | agent |
+| `agent check` | The agent runs the app and checks by hand, with the playwright skill for UI, and saves evidence to `evidence/` next to the spec, committed with the change | agent |
 | `manual` | Steps and the expected result for a human | user |
 
 Prefer them in that order. Anything other than `test` gives its reason, such as an external system, a visual judgment or a one-off migration. Every scenario a user sees on screen also gets an agent check.
+
+To run the app for an agent check, start it with `run.start` from `.agents/validation.json`, wait until `run.url` answers and stop it when done. If `run` is missing, derive it from the README, confirm it with the user and save it there.
 
 Technical work without business behavior has Checks instead of Scenarios; write `Not applicable` under Scenarios, Glossary, Data, Life cycle and Workflows.
 
@@ -196,6 +198,13 @@ Technical work without business behavior has Checks instead of Scenarios; write 
 - **Existing building blocks.** The design reuses what the project already has, or says why not.
 - **Contracts.** Every changed public API, event, schema or config is named, with a migration path when breaking.
 - **ADRs.** Nothing contradicts an accepted ADR without proposing a new one.
+
+## Changing an approved spec
+
+1. Set `Status: Draft` and say what changes and why.
+2. Change it with the user. New unknowns go through the interview.
+3. Run the review step on the whole spec, get approval, set `Approved`.
+4. If PLAN.md exists, update it with rs-plan.
 
 ## Rules
 

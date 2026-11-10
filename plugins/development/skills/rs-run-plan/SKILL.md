@@ -11,16 +11,17 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
 
 1. Read PLAN.md and the spec. Both must be `Approved`.
 2. Be on the plan's branch with a clean working tree.
-3. Resume safely: reset leftover `in-progress` tasks to `todo`, and remove worktrees and task branches left by an earlier run.
+3. Resume safely: reset leftover `in-progress` tasks to `todo`. Remove worktrees left by an earlier run, and the task branch of every task that is not `blocked`.
+4. Add `.worktrees/` to `.git/info/exclude` if it is not there. Worktrees live inside the repository, so sandboxed agents can write to them.
 
 ## Loop
 
-1. **Pick.** Ready tasks are `todo` tasks whose dependencies are all `done`. Take up to 3 whose `Files` do not overlap. If you cannot run subagents, take 1 and run it inline with rs-implement-task as usual.
+1. **Pick.** Ready tasks are `todo` tasks whose dependencies are all `done`. Take up to 3 whose `Files` do not overlap. At most one task in a batch may run the app or use another shared resource, such as a fixed port or a local database: any task with `Screens` or an `agent check`. If the project's tests share such a resource, take 1. If you cannot run subagents, take 1 and run it inline with rs-implement-task as usual.
 2. **Dispatch.** For each task in the batch:
 
    ```sh
    base=$(git rev-parse HEAD)
-   git worktree add -b "$branch-$id" "../$(basename "$PWD")-$id" "$base"
+   git worktree add -b "$branch-$id" ".worktrees/$id" "$base"
    ```
 
    Start the rs-task-implementer agent, or any subagent, in that worktree, on the task's model: `small` is the smallest model you can start subagents on, `default` is your own. Give it the worktree path, the spec path, the plan path and the task ID. Tell it to run rs-implement-task, to leave PLAN.md alone and to report done or blocked with the reason. Install dependencies in the worktree first if the project needs them.
@@ -28,12 +29,12 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
 
    ```sh
    git cherry-pick "$base..$branch-$id"
-   git worktree remove "../$(basename "$PWD")-$id"
+   git worktree remove --force ".worktrees/$id"
    git branch -D "$branch-$id"
    ```
 
-   A cherry-pick conflict means the plan missed a dependency: run `git cherry-pick --abort`, mark the task `blocked` and keep its branch for the user.
-4. **Escalate.** A `small` task that reports blocked or leaves a failing gate runs once more on `default`. Reset its worktree first with `git -C "../$(basename "$PWD")-$id" reset --hard "$base"`. Only a `default` run can mark a task `blocked`.
+   A cherry-pick conflict means the plan missed a dependency: run `git cherry-pick --abort`, mark the task `blocked`, remove its worktree and keep its branch for the user.
+4. **Escalate.** A `small` task that reports blocked or leaves a failing gate runs once more on `default`. Reset its worktree first with `git -C ".worktrees/$id" reset --hard "$base"`. Only a `default` run can mark a task `blocked`; then remove its worktree and keep its branch.
 5. **Gate.** After a batch of more than one task, run rs-check-and-commit on the combined result.
 6. **Record.** Update the statuses in PLAN.md and commit them, such as `Mark T2 and T3 done`.
 7. Repeat until no task is ready.
@@ -41,7 +42,7 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
 ## Stop and report
 
 - A task is blocked: write the reason under its `Notes`. Never start tasks that depend on it. Other ready tasks may continue.
-- A task would contradict an ADR or needs a spec change: stop the whole run.
+- A task would contradict an ADR or needs a spec change: stop the whole run. Propose the change; rs-spec describes how to change an approved spec, rs-plan how to update the plan after.
 - The gate cannot pass on the combined result: stop the whole run.
 
 ## End
