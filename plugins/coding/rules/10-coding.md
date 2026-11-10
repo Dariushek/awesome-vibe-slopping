@@ -8,5 +8,4 @@
 - Skip files over 100KB unless explicitly required.
 - Keep solutions simple and direct.
 - Test your code before declaring done.
-- Suggest running /cost when a session is running long to monitor cache ratio.
 - Recommend starting a new session when switching to an unrelated task.
