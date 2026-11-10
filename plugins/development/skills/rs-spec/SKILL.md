@@ -19,7 +19,7 @@ The spec describes the domain the way the user sees it, then the scenarios and c
 6. **Design.** Add the technical part: approach, affected areas, failures, architecture decisions. If the change adds or changes an external system, container or component, include the changed C4 diagram from ARCHITECTURE.md.
 7. **Review.** Hand the spec path, and nothing else, to the rs-spec-reviewer agent, or any fresh subagent with the checklist below. If you cannot run subagents, apply the checklist yourself, line by line. Fix every finding.
 8. **Approve.** Iterate until the user approves, then set `Status: Approved`.
-9. **Decisions.** Record each architecture decision with rs-architecture-decision. Decisions the user approved with the spec are `Accepted`. Link the ADRs from the spec.
+9. **Decisions.** Record each architecture decision with rs-architecture-decision. In a project without ADRs, update the `## Architecture` rules in AGENTS.md instead, with the user's OK. Decisions the user approved with the spec are `Accepted`. Link the ADRs from the spec.
 10. Next step: rs-ui-design when users see the change, otherwise rs-plan with `Prototype: Not applicable`.
 
 ## Interview techniques

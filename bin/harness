@@ -32,6 +32,7 @@ GLOBAL_LOCK = Path.home() / ".config" / MARKETPLACE_NAME / "global.json"
 CLAUDE_KINDS = ("skills", "agents", "commands")
 GIT_HOOKS_DIR = ".githooks"
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
+EXCLUSIVE_BUNDLES = [{"architecture", "architecture-light"}]
 FRONTMATTER_FENCE = "---"
 
 
@@ -309,6 +310,10 @@ def pick_bundles(args, lock):
     bundles = args.bundles or lock.get("bundles")
     if not bundles:
         sys.exit(f"No bundles given and none saved. Available: {', '.join(bundle_names())}")
+
+    for group in EXCLUSIVE_BUNDLES:
+        if group <= set(bundles):
+            sys.exit(f"Pick one of {', '.join(sorted(group))}")
 
     return bundles
 

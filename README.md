@@ -28,6 +28,7 @@ bin/harness                       sync and validation
 | `csharp`        | C# language rules                                     |
 | `browser`       | `playwright` skill                                    |
 | `architecture`  | ARCHITECTURE.md, ADRs, architecture tests             |
+| `architecture-light` | Short rules in AGENTS.md, no ADRs. Instead of `architecture` |
 | `development`   | Bug fix, small change, spec, UI, plan, tasks, review  |
 | `validation`    | Build, analysis and test gate enforced by git hooks   |
 | `docs`          | `rs-readme`: what to install, how to run and test     |

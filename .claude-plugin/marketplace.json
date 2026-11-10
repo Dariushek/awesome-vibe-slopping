@@ -43,6 +43,11 @@
       "description": "Define, follow and record architecture: ARCHITECTURE.md, ADRs and architecture tests."
     },
     {
+      "name": "architecture-light",
+      "source": "./plugins/architecture-light",
+      "description": "Short architecture rules in AGENTS.md, no ADRs or diagrams."
+    },
+    {
       "name": "development",
       "source": "./plugins/development",
       "description": "Development loop: bug fix, small change, spec, UI design, plan, tasks, validation gate, review and automated plan runs."
