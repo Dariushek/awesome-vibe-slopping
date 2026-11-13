@@ -53,7 +53,40 @@ internal static class DatabaseSetup
 
 - Pin the image tag. Mount the data directories of the engine on tmpfs.
 - One container per run, one database per test.
-- Optional speed-up: before starting a container, try a long-lived one on a fixed port and use it when reachable. CI falls through to the ephemeral one.
+
+## Long-lived container, optional
+
+Offer it when starting the container takes more than a few seconds of every run. Two parts:
+
+A script at the project root, `db-dev.sh`, with four commands:
+
+| Command | Does |
+|---------|------|
+| `up` | Starts the container when it is not running. Removes a stopped one first and creates it again, never restarts it. |
+| `down` | Removes the container. |
+| `status` | Shows whether it runs and on which port. |
+| `clean` | `down`, then `up`. The way to drop the test databases that pile up. |
+
+- Same image tag and the same tmpfs mounts as the container the tests start.
+- A container name unique to the project and a fixed host port that is no default of the engine, such as 14330 for SQL Server.
+- A password that is used nowhere else. It is committed, so it protects nothing.
+- An unknown command prints the usage and exits with 1.
+
+A check in the test setup, before the container starts:
+
+```csharp
+if (await IsReachableAsync(longLivedConnectionString))
+{
+    rootConnectionString = longLivedConnectionString;
+    return;
+}
+```
+
+- Try to open a connection with a timeout of one second. Any failure means not reachable.
+- When reachable, start no container. Otherwise start one as above, which is what CI gets.
+- Host, port and password in the setup match the script. Say so in a comment on both sides.
+- Create each test database over a connection, never through the shell of the container. The tests did not start this one.
+- The tests pass the same way with and without it. Nothing may require the script.
 
 ## Fixture, once per test
 
