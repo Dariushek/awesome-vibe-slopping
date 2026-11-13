@@ -6,3 +6,6 @@
 - During the loop run only the tests the change affects. Before a commit run all automated tests, except those the project runs before a push, such as end-to-end tests.
 - A new feature that changes no existing behavior leaves existing tests untouched. When one of them fails, fix the code, never the test.
 - When changing existing behavior, change its tests first, observe them failing, then change the implementation.
+- Name a test after one behavior of the system, in domain words, such as `Book_out_of_copies_cannot_be_rented`. Never after a method, a class or an implementation detail.
+- One behavior per test.
+- The test body highlights the behavior under test: the values that drive it, the action and the outcome. Everything else is noise; hide it behind helper methods with domain names.
