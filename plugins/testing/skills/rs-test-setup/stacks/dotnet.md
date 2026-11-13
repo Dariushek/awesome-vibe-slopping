@@ -2,6 +2,8 @@
 
 Use the test framework the project has. For a new test project use TUnit.
 
+When `dotnet new list` shows the `RS integration tests` template, create the test project with it and skip to the first test: it brings the container setup and the fixture below. Add the project with `dotnet sln add <project> --include-references false`.
+
 ## Parts
 
 | Part | Tool |
