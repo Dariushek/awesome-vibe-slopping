@@ -1,6 +1,6 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "da42498-dirty",
+  "commit": "ecfc439-dirty",
   "bundles": [
     "git",
     "validation"
@@ -19,6 +19,6 @@
     ".agents/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
     ".claude/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
     ".claude/hooks/guard": "5832424ddd19e322b68916650c726ddb8ce07cb4bf36cd833331071c43723b66",
-    ".claude/hooks/guard.py": "ec82cde7170dcd5ba75c3e8c1edadb2c4cf6e1becf4eed53c731e6d1cb94849d"
+    ".claude/hooks/guard.py": "7abba9ec280178a09921337bb2a6eb0381a403605a585218861917369ddc7d5e"
   }
 }

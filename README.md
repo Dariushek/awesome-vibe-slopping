@@ -101,7 +101,8 @@ A command can take only the changed files:
 | Build, analysis, tests | `pre-commit`, `pre-push` | With `--no-verify` |
 | Commit message format, no AI attribution | `commit-msg`, from the `git` bundle | With `--no-verify` |
 | Spec and plan structure | `.githooks/check-specs`, from the `development` bundle, as a `commit` command | With `--no-verify` |
-| `--no-verify`, changes to `core.hooksPath` or `.githooks/` | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
+| `--no-verify`, changes to `core.hooksPath`, `.githooks/` or `.claude/hooks/`, taking the guard out of the agent settings | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
+| Removing or changing a command in `.agents/validation.json` | The same agent hook, which asks the user | By a human, and by agents without tool hooks |
 | All of the above | CI running `.githooks/validate all` | No |
 
 Nothing local is a wall: whoever owns the machine can skip a git hook. The agent hook closes that door for the agent, CI closes it for everyone. A project without CI has defaults, not guarantees.

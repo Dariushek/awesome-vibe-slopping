@@ -650,6 +650,111 @@ class GuardTest(unittest.TestCase):
         self.assert_allowed(result)
 
 
+class GuardedFilesTest(ProjectCase):
+    BLOCKED = 2
+    GUARD_HOOK = {"type": "command", "command": 'sh "$CLAUDE_PROJECT_DIR/.claude/hooks/guard"'}
+
+    def setUp(self):
+        super().setUp()
+        self.settings = self.write(".claude/settings.json", json.dumps({
+            "permissions": {"allow": ["Bash(ls:*)"]},
+            "hooks": {"PreToolUse": [{"matcher": "Bash", "hooks": [self.GUARD_HOOK]}]},
+        }, indent=2))
+        self.validation = self.write(".agents/validation.json", json.dumps({
+            "commit": ["build", "test"], "push": ["slow test"],
+        }, indent=2))
+
+    def write(self, rel, text):
+        path = self.project / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text)
+        return path
+
+    def call(self, tool, **tool_input):
+        return subprocess.run(
+            [sys.executable, str(GUARD)],
+            input=json.dumps({"tool_name": tool, "tool_input": tool_input, "cwd": str(self.project)}),
+            capture_output=True, text=True,
+        )
+
+    def assert_blocked(self, result, reason):
+        self.assertEqual(result.returncode, self.BLOCKED, result.stdout + result.stderr)
+        self.assertIn(reason, result.stderr)
+
+    def assert_allowed(self, result):
+        self.assertEqual((result.returncode, result.stdout), (0, ""), result.stderr)
+
+    def assert_asks(self, result, reason):
+        self.assertEqual(result.returncode, 0, result.stderr)
+        decision = json.loads(result.stdout)["hookSpecificOutput"]
+        self.assertEqual(decision["permissionDecision"], "ask")
+        self.assertIn(reason, decision["permissionDecisionReason"])
+
+    def test_editing_an_agent_hook_script_is_blocked(self):
+        path = str(self.project / ".claude/hooks/guard.py")
+
+        self.assert_blocked(self.call("Edit", file_path=path, old_string="a", new_string="b"), ".claude/hooks")
+
+    def test_deleting_the_agent_hooks_from_the_shell_is_blocked(self):
+        self.assert_blocked(self.call("Bash", command="rm -rf .claude/hooks"), ".claude/hooks")
+
+    def test_taking_the_guard_out_of_the_settings_is_blocked(self):
+        command = json.dumps(self.GUARD_HOOK["command"])
+
+        result = self.call("Edit", file_path=str(self.settings), old_string=command, new_string='"true"')
+
+        self.assert_blocked(result, "guard")
+
+    def test_overwriting_the_settings_without_the_guard_is_blocked(self):
+        self.assert_blocked(self.call("Write", file_path=str(self.settings), content="{}"), "guard")
+
+    def test_other_changes_to_the_settings_are_allowed(self):
+        result = self.call("Edit", file_path=str(self.settings), old_string="Bash(ls:*)", new_string="Bash(cat:*)")
+
+        self.assert_allowed(result)
+
+    def test_switching_all_hooks_off_is_blocked(self):
+        local = str(self.project / ".claude/settings.local.json")
+
+        self.assert_blocked(self.call("Write", file_path=local, content='{"disableAllHooks": true}'), "disableAllHooks")
+
+    def test_overwriting_the_settings_from_the_shell_is_blocked(self):
+        self.assert_blocked(self.call("Bash", command="echo '{}' > .claude/settings.json"), "settings")
+
+    def test_removing_a_validation_command_asks_the_user(self):
+        result = self.call("Edit", file_path=str(self.validation), old_string='"build",', new_string="")
+
+        self.assert_asks(result, "build")
+
+    def test_changing_a_validation_command_asks_the_user(self):
+        result = self.call("Edit", file_path=str(self.validation), old_string='"slow test"', new_string='"true"')
+
+        self.assert_asks(result, "slow test")
+
+    def test_adding_a_validation_command_is_allowed(self):
+        result = self.call("Edit", file_path=str(self.validation), old_string='"test"', new_string='"test", "lint"')
+
+        self.assert_allowed(result)
+
+    def test_overwriting_the_validation_commands_with_fewer_asks_the_user(self):
+        result = self.call("Write", file_path=str(self.validation), content='{"commit": ["build"]}')
+
+        self.assert_asks(result, "test")
+
+    def test_changing_the_validation_file_from_the_shell_asks_the_user(self):
+        self.assert_asks(self.call("Bash", command="sed -i s/test/true/ .agents/validation.json"), "validation.json")
+
+    def test_reading_the_validation_file_is_allowed(self):
+        self.assert_allowed(self.call("Bash", command="cat .agents/validation.json"))
+
+    def test_first_validation_file_is_allowed(self):
+        self.validation.unlink()
+
+        result = self.call("Write", file_path=str(self.validation), content='{"commit": ["build"]}')
+
+        self.assert_allowed(result)
+
+
 SPEC = """# Place order
 
 - Date: 2026-01-10
