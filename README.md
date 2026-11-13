@@ -79,7 +79,19 @@ The `validation` bundle syncs `.githooks/` and sets `core.hooksPath` to it, unle
 }
 ```
 
-`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. A stage that already passed on the same working tree is skipped, so a gate run right before the commit is not repeated by the hook. An optional `run` entry, `{"start": "...", "url": "..."}`, tells agents how to start the app for checks. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
+`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. A stage that already passed on the same working tree is skipped, so a gate run right before the commit is not repeated by the hook.
+
+A command can take only the changed files:
+
+```json
+{
+  "commit": ["eslint {changed:*.ts,*.tsx}", "dotnet format --verify-no-changes --include {changed:*.cs}"]
+}
+```
+
+`{changed}` is replaced with every changed file, `{changed:<patterns>}` with those matching one of the comma-separated patterns. `commit` compares the working tree with `HEAD`, `push` with the upstream branch, or `origin/HEAD` when there is none. Deleted files are left out, untracked ones included. A command with no matching file is skipped, and a list too long for one command line is split over several runs. Use it for formatters and per-file linters; builds and tests stay whole.
+
+An optional `run` entry, `{"start": "...", "url": "..."}`, tells agents how to start the app for checks. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
 
 ## Global
 

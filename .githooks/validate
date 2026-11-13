@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Run the project's validation commands for a stage: commit, push or all."""
 
+import fnmatch
 import hashlib
 import json
 import os
+import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -13,6 +16,10 @@ from pathlib import Path
 CONFIG = Path(".agents") / "validation.json"
 STAGES = ("commit", "push")
 STAMP_FILE = "harness-validated.json"
+CHANGED = re.compile(r"\{changed(?::([^}]*))?\}")
+CMD_VARIABLE = re.compile(r"%[^%]+%")
+PUSH_BASES = ("@{upstream}", "origin/HEAD")
+MAX_ARGUMENTS_LENGTH = 6000 if os.name == "nt" else 100000
 
 
 def git(root, *args, env=None):
@@ -63,16 +70,109 @@ def read_stamps(path):
         return {}
 
 
+def file_list(root, *args):
+    """Git prints paths as UTF-8 on every system, so never decode them with the locale's encoding."""
+    result = subprocess.run(["git", *args, "-z"], cwd=root, capture_output=True)
+    if result.returncode != 0:
+        return None
+
+    return [name for name in result.stdout.decode("utf-8", "surrogateescape").split("\0") if name]
+
+
+def base_commit(root, name):
+    """Commit the stage compares against, None when there is nothing to compare with."""
+    if name == "commit":
+        candidates = ("HEAD",)
+    else:
+        candidates = tuple(
+            git(root, "merge-base", "HEAD", base).stdout.strip() for base in PUSH_BASES
+        )
+
+    for candidate in candidates:
+        if candidate and git(root, "rev-parse", "--verify", "--quiet", f"{candidate}^{{commit}}").returncode == 0:
+            return candidate
+
+    return None
+
+
+def changed_files(root, name):
+    """Files of the working tree that differ from the stage's base, deleted ones left out."""
+    untracked = file_list(root, "ls-files", "--others", "--exclude-standard") or []
+    base = base_commit(root, name)
+    tracked = file_list(root, "diff", "--name-only", "--diff-filter=d", base) if base else None
+    if tracked is None:
+        tracked = file_list(root, "ls-files", "--cached") or []
+
+    return sorted(set(tracked) | set(untracked))
+
+
+def matching(files, patterns):
+    if not patterns:
+        return files
+
+    return [f for f in files if any(fnmatch.fnmatch(f, p.strip()) for p in patterns.split(","))]
+
+
+def quote(files, windows=os.name == "nt"):
+    """File names as shell arguments. cmd.exe takes `&` and friends literally only inside double quotes."""
+    if windows:
+        for name in files:
+            if CMD_VARIABLE.search(name):
+                sys.exit(f"validate: cmd.exe would expand a variable in the file name {name}, rename it")
+
+        return " ".join(f'"{name}"' for name in files)
+
+    return shlex.join(files)
+
+
+def batches(files):
+    batch, length = [], 0
+    for name in files:
+        if batch and length + len(name) > MAX_ARGUMENTS_LENGTH:
+            yield batch
+            batch, length = [], 0
+
+        batch.append(name)
+        length += len(name) + 3
+
+    if batch:
+        yield batch
+
+
+def expand(command, files):
+    """Command lines with the changed files filled in, none when a placeholder matches no file."""
+    placeholders = CHANGED.findall(command)
+    if not placeholders:
+        return [command]
+
+    if any(not matching(files, patterns) for patterns in placeholders):
+        return []
+
+    if len(placeholders) == 1:
+        return [
+            CHANGED.sub(lambda _: quote(batch), command)
+            for batch in batches(matching(files, placeholders[0]))
+        ]
+
+    return [CHANGED.sub(lambda match: quote(matching(files, match.group(1))), command)]
+
+
 def run_stage(root, name, commands, stamps):
     if stamps.get(name) and stamps.get(name) == fingerprint(root, commands):
         print(f"validate {name}: passed on this tree already, skipped", flush=True)
         return True
 
+    files = changed_files(root, name) if any(CHANGED.search(c) for c in commands) else []
     for command in commands:
-        print(f"validate {name}: {command}", flush=True)
-        if subprocess.run(command, shell=True, cwd=root).returncode != 0:
-            print(f"validate: failed: {command}", file=sys.stderr)
-            return False
+        lines = expand(command, files)
+        if not lines:
+            print(f"validate {name}: no changed files, skipped: {command}", flush=True)
+
+        for line in lines:
+            print(f"validate {name}: {line}", flush=True)
+            if subprocess.run(line, shell=True, cwd=root).returncode != 0:
+                print(f"validate: failed: {command}", file=sys.stderr)
+                return False
 
     stamps[name] = fingerprint(root, commands)
     return True

@@ -5,3 +5,4 @@
 - If `core.hooksPath` is unset and `.githooks/` exists, set it with `git config core.hooksPath .githooks`. Never unset it or point it elsewhere.
 - `.githooks/validate commit` must pass before reporting work as done, `.githooks/validate all` before a push or pull request. Never report done while a command fails.
 - A stage that passed on the same working tree is skipped, so run it freely.
+- A command can take only the changed files: `{changed}` or `{changed:*.cs,*.ts}` in it is replaced with them, and the command is skipped when there are none. Use it for formatters and per-file linters, never for builds, tests or analysis that spans files.

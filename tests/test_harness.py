@@ -29,6 +29,10 @@ loader = SourceFileLoader("harness", str(REPO / "bin" / "harness"))
 harness = module_from_spec(spec_from_loader("harness", loader))
 loader.exec_module(harness)
 
+loader = SourceFileLoader("validate", str(VALIDATE))
+validate = module_from_spec(spec_from_loader("validate", loader))
+loader.exec_module(validate)
+
 
 def run(*argv):
     """Run a harness command, return its output and exit code."""
@@ -300,6 +304,103 @@ class ValidateHookTest(ProjectCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("invalid JSON", result.stderr)
+
+    def echo(self, placeholder):
+        return f'"{sys.executable}" -c "import sys; print(\'got\', ascii(sys.argv[1:]))" {placeholder}'
+
+    def commit_all(self):
+        git(self.project, "add", "-A")
+        git(self.project, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "x")
+
+    def test_changed_placeholder_gets_only_changed_files_matching_the_pattern(self):
+        for name in ("old.py", "edited.py", "gone.py"):
+            (self.project / name).write_text("x")
+        self.commit_all()
+        (self.project / "edited.py").write_text("y")
+        (self.project / "gone.py").unlink()
+        (self.project / "new file.py").write_text("x")
+        (self.project / "new.txt").write_text("x")
+
+        result = self.validate(json.dumps({"commit": [self.echo("{changed:*.py}")]}))
+
+        self.assertIn("got ['edited.py', 'new file.py']", result.stdout)
+
+    def test_changed_file_with_special_characters_stays_one_argument(self):
+        for name in ("caf\u00e9 menu.py", "a&b.py"):
+            (self.project / name).write_text("x")
+
+        result = self.validate(json.dumps({"commit": [self.echo("{changed:*.py}")]}))
+
+        self.assertIn("got ['a&b.py', 'caf\\xe9 menu.py']", result.stdout)
+
+    def test_changed_placeholder_without_pattern_gets_every_changed_file(self):
+        (self.project / "old.py").write_text("x")
+        self.commit_all()
+        (self.project / "new.txt").write_text("x")
+
+        result = self.validate(json.dumps({"commit": [self.echo("{changed}")]}))
+
+        self.assertIn("got ['.agents/validation.json', 'new.txt']", result.stdout)
+
+    def test_command_with_no_changed_files_is_skipped(self):
+        (self.project / "old.py").write_text("x")
+        self.commit_all()
+
+        result = self.validate(json.dumps({"commit": [self.echo("{changed:*.py}")]}))
+
+        self.assertEqual(result.returncode, 0)
+        self.assertNotIn("got [", result.stdout)
+        self.assertIn("no changed files", result.stdout)
+
+    def test_changed_placeholder_gets_every_file_before_the_first_commit(self):
+        (self.project / "first.py").write_text("x")
+
+        result = self.validate(json.dumps({"commit": [self.echo("{changed:*.py}")]}))
+
+        self.assertIn("got ['first.py']", result.stdout)
+
+    def test_push_stage_gets_files_changed_since_the_upstream_branch(self):
+        (self.project / "old.py").write_text("x")
+        self.commit_all()
+        git(self.project, "update-ref", "refs/remotes/origin/main", "HEAD")
+        git(self.project, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/main")
+        (self.project / "pushed.py").write_text("x")
+        self.commit_all()
+        (self.project / "pending.py").write_text("x")
+
+        result = self.validate(json.dumps({"push": [self.echo("{changed:*.py}")]}), stage="push")
+
+        self.assertIn("got ['pending.py', 'pushed.py']", result.stdout)
+
+
+class ExpandTest(unittest.TestCase):
+    def test_long_file_list_is_split_over_several_runs(self):
+        limit = validate.MAX_ARGUMENTS_LENGTH
+        self.addCleanup(setattr, validate, "MAX_ARGUMENTS_LENGTH", limit)
+        validate.MAX_ARGUMENTS_LENGTH = 8
+
+        lines = validate.expand("lint {changed}", ["aaaa.py", "bbbb.py", "cccc.py"])
+
+        self.assertEqual(lines, ["lint aaaa.py", "lint bbbb.py", "lint cccc.py"])
+
+    def test_each_placeholder_gets_its_own_files(self):
+        lines = validate.expand("lint {changed:*.py} --css {changed:*.css,*.scss}", ["a.py", "b.css", "c.scss"])
+
+        self.assertEqual(lines, ["lint a.py --css b.css c.scss"])
+
+    def test_posix_shell_gets_a_name_with_a_space_as_one_argument(self):
+        self.assertEqual(validate.quote(["my file.py", "a.py"], windows=False), "'my file.py' a.py")
+
+    def test_windows_shell_gets_every_name_in_double_quotes(self):
+        quoted = validate.quote(["my file.py", "src/a&b.py", "100%.py"], windows=True)
+
+        self.assertEqual(quoted, '"my file.py" "src/a&b.py" "100%.py"')
+
+    def test_windows_shell_refuses_a_name_it_would_expand_as_a_variable(self):
+        with self.assertRaises(SystemExit) as refused:
+            validate.quote(["my%PATH%.py"], windows=True)
+
+        self.assertIn("my%PATH%.py", str(refused.exception))
 
 
 if __name__ == "__main__":
