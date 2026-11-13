@@ -47,6 +47,22 @@ DEVIN_MANIFEST = "devin.json"
 DEVIN_HOOKS_PLACEHOLDER = "{hooks_dir}"
 DEVIN_HOOKS_ROOT = "${DEVIN_PROJECT_DIR:-.}/" + DEVIN_HOOKS_DIR
 HOOK_MANIFESTS = (HOOKS_MANIFEST, DEVIN_MANIFEST)
+# Devin reads the same agent files under its own tool names and has no field to preload skills.
+DEVIN_AGENTS_DIR = ".devin/agents"
+DEVIN_TOOLS = {
+    "Read": ("read",),
+    "Grep": ("grep",),
+    "Glob": ("glob",),
+    "Bash": ("exec", "get_output", "kill_shell"),
+    "Edit": ("edit", "apply_patch"),
+    "MultiEdit": ("edit", "apply_patch"),
+    "Write": ("write",),
+    "NotebookEdit": ("notebook_edit",),
+    "WebFetch": ("webfetch",),
+    "Skill": ("skill",),
+}
+DEVIN_SKILL_TOOL = "skill"
+DEVIN_PRELOAD = "Before anything else load these skills: {skills}."
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
 EXCLUSIVE_BUNDLES = [{"architecture", "architecture-light"}]
 FRONTMATTER_FENCE = "---"
@@ -160,15 +176,16 @@ def source_commit():
     return commit
 
 
-def frontmatter(path):
-    lines = read_text(path).splitlines()
-    if not lines or lines[0] != FRONTMATTER_FENCE:
-        return {}
+def split_frontmatter(text):
+    """The fields and the text after them. No fields when the frontmatter is missing or never closes."""
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != FRONTMATTER_FENCE:
+        return {}, text
 
     fields = {}
-    for line in lines[1:]:
-        if line == FRONTMATTER_FENCE:
-            return fields
+    for number, line in enumerate(lines[1:], start=2):
+        if line.strip() == FRONTMATTER_FENCE:
+            return fields, "".join(lines[number:])
 
         key, sep, value = line.partition(":")
         if not sep:
@@ -176,7 +193,55 @@ def frontmatter(path):
 
         fields[key.strip()] = value.strip()
 
-    return {}
+    return {}, text
+
+
+def frontmatter(path):
+    return split_frontmatter(read_text(path))[0]
+
+
+def listed(value):
+    return [item.strip() for item in value.split(",") if item.strip()]
+
+
+def devin_tools(tools, skills):
+    names = []
+    for tool in tools:
+        if tool not in DEVIN_TOOLS:
+            sys.exit(f"Devin has no tool for {tool}. Known: {', '.join(DEVIN_TOOLS)}")
+
+        names += DEVIN_TOOLS[tool]
+
+    if skills:
+        names.append(DEVIN_SKILL_TOOL)
+
+    return list(dict.fromkeys(names))
+
+
+def devin_agent(text):
+    """An agent file as Devin reads it: its tool names, and preloaded skills as an instruction."""
+    fields, body = split_frontmatter(text)
+    skills = listed(fields.pop("skills", ""))
+    lines = [FRONTMATTER_FENCE]
+    for key, value in fields.items():
+        if key != "tools":
+            lines.append(f"{key}: {value}")
+            continue
+
+        lines.append("allowed-tools:")
+        lines += [f"  - {tool}" for tool in devin_tools(listed(value), skills)]
+
+    lines.append(FRONTMATTER_FENCE)
+    if skills:
+        named = ", ".join(f"`{skill}`" for skill in skills)
+        lines += ["", DEVIN_PRELOAD.format(skills=named)]
+
+    return "\n".join(lines) + "\n" + body
+
+
+def add_devin_agents(files, name, dest):
+    for path in sorted((bundle_dir(name) / "agents").glob("*.md")):
+        files[f"{dest}/{path.name}"] = devin_agent(read_text(path)).encode(ENCODING)
 
 
 def manifest(name):
@@ -241,6 +306,9 @@ def plan_files(bundles, targets, hook_bundles=None):
         if Target.DEVIN in targets and (root / "hooks" / DEVIN_MANIFEST).is_file():
             add_tree(files, root / "hooks", DEVIN_HOOKS_DIR, skip=HOOK_MANIFESTS)
 
+        if Target.DEVIN in targets:
+            add_devin_agents(files, name, DEVIN_AGENTS_DIR)
+
         if Target.CLAUDE not in targets:
             continue
 
@@ -252,11 +320,15 @@ def plan_files(bundles, targets, hook_bundles=None):
     return files
 
 
+def devin_config_dir():
+    appdata = os.environ.get("APPDATA")
+    return Path(appdata) / "devin" if appdata else Path.home() / ".config" / "devin"
+
+
 def known_agents():
     """Agents as (config dir, rules file, skills dir relative to home)."""
     home = Path.home()
-    appdata = os.environ.get("APPDATA")
-    devin = Path(appdata) / "devin" if appdata else home / ".config" / "devin"
+    devin = devin_config_dir()
     agents = [
         (home / ".claude", "CLAUDE.md", ".claude/skills"),
         (home / ".codex", "AGENTS.md", ".agents/skills"),
@@ -275,6 +347,7 @@ def plan_global_files(bundles):
     dests = {skills for _, _, skills in global_agents() if skills}
 
     claude = (Path.home() / ".claude").is_dir()
+    devin = devin_config_dir()
 
     files = {}
     for name in bundles:
@@ -283,6 +356,9 @@ def plan_global_files(bundles):
 
         if claude:
             add_tree(files, bundle_dir(name) / "agents", ".claude/agents")
+
+        if devin.is_dir() and devin.is_relative_to(Path.home()):
+            add_devin_agents(files, name, f"{devin.relative_to(Path.home()).as_posix()}/agents")
 
     return files
 
@@ -813,6 +889,13 @@ def check_references(root, known, problems):
             problems.append(f"{path}: {reference} is no skill or agent")
 
 
+def check_agent_tools(agent, problems):
+    try:
+        devin_agent(read_text(agent))
+    except SystemExit as refused:
+        problems.append(f"{agent}: {refused}")
+
+
 def check_bundle(name, names, skills, agents, problems):
     root = PLUGINS_DIR / name
     dependencies = manifest(name).get("dependencies", [])
@@ -830,6 +913,7 @@ def check_bundle(name, names, skills, agents, problems):
 
     for agent in sorted((root / "agents").glob("*.md")):
         check_named(agent, agent.stem, problems)
+        check_agent_tools(agent, problems)
         preloaded = frontmatter(agent).get("skills", "")
         for skill in (s.strip() for s in preloaded.split(",") if s.strip()):
             if skill not in skills:

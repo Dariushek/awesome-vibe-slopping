@@ -49,7 +49,7 @@ Always writes a managed block into the project's `AGENTS.md`. Everything outside
 |-----------------|--------------------------------------------------------------------------|-------------------------------------------|
 | `agents`        | `.agents/skills/`                                                        | Codex, Cursor, Copilot, Gemini and others |
 | `claude`        | `@AGENTS.md` in `CLAUDE.md`, copies to `.claude/skills,agents,commands,hooks`, agent hooks in `.claude/settings.json` | Claude Code |
-| `devin`         | `.devin/hooks.v1.json` and scripts in `.devin/hooks/`, for bundles with Devin hooks | Devin Desktop, Devin CLI |
+| `devin`         | `.devin/hooks.v1.json` and scripts in `.devin/hooks/`, for bundles with Devin hooks. Agents in `.devin/agents/`, rebuilt from the bundle's agents on every sync | Devin Desktop, Devin CLI |
 | `claude-plugin` | `@AGENTS.md` in `CLAUDE.md`, enables plugins in `.claude/settings.json`  | Claude Code, auto-updates from GitHub     |
 
 Default `--targets agents,claude,devin`. A project synced before a target existed keeps its saved list; pass `--targets` once to change it. Use `claude-plugin` instead of `claude` to stop copying and track this repo live.
@@ -110,6 +110,8 @@ A command can take only the changed files:
 
 Devin Desktop and Devin CLI share one engine and get the guard through the `devin` target. Devin cannot ask the user from a hook, so a change that needs approval is refused there with a request to ask. Hooks do not run while a workspace is in Restricted Mode. The Hooks tab of the Customize page in Devin Desktop, or `/hooks` in the CLI, shows whether the guard is loaded. The subagent rules need the caller's name, which only Claude Code passes.
 
+Devin gets the agents as translated copies, never written by hand: tool names become Devin's, such as `Bash` to `exec`, and `skills` becomes an instruction to load them, since Devin has no such field. `bin/harness check` fails on a tool with no Devin counterpart. Custom subagents are experimental in Devin.
+
 Nothing local is a wall: whoever owns the machine can skip a git hook. The agent hook closes that door for the agent, CI closes it for everyone. A project without CI has defaults, not guarantees.
 
 A minimal CI job, with the project's toolchain set up before the last step:
@@ -133,7 +135,7 @@ bin/harness global communication browser
 bin/harness global                  # later: update from saved bundles
 ```
 
-Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, Devin CLI's `~/.config/devin/AGENTS.md`, `%APPDATA%\devin\AGENTS.md` on Windows, and Devin desktop's `~/.devin/global_rules.md`. Skills are copied to `~/.claude/skills/` and, when Codex or Devin is installed, `~/.agents/skills/`. Agents are copied to `~/.claude/agents/`, the only agent that reads this format. On Windows run `python bin\harness global`. Skills changed outside this repo are skipped unless `--force`.
+Writes the managed block into each user-level instructions file whose agent is installed: `~/.claude/CLAUDE.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md`, Devin CLI's `~/.config/devin/AGENTS.md`, `%APPDATA%\devin\AGENTS.md` on Windows, and Devin desktop's `~/.devin/global_rules.md`. Skills are copied to `~/.claude/skills/` and, when Codex or Devin is installed, `~/.agents/skills/`. Agents are copied to `~/.claude/agents/` and, translated, to Devin's `~/.config/devin/agents/`. On Windows run `python bin\harness global`. Skills changed outside this repo are skipped unless `--force`.
 
 The list you pass replaces the saved one, and skills of dropped bundles are removed. Bundles and file hashes are saved in `~/.config/awesome-vibe-slopping/global.json`. Global bundles apply everywhere, so leave them out of project syncs; sync warns when rules would apply twice. `bin/harness remove --global` takes it all out.
 

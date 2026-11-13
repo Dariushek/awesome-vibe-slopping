@@ -260,6 +260,35 @@ class SyncTest(ProjectCase):
         self.assertTrue((self.project / ".devin/hooks.v1.json").is_file())
         self.assertEqual(self.agent_hook_commands(), ['sh "$CLAUDE_PROJECT_DIR/.claude/hooks/guard"'])
 
+    def test_devin_target_writes_the_agents_under_devins_tool_names(self):
+        run("sync", str(self.project), "development", "--targets", "agents,devin")
+
+        agent = (self.project / ".devin/agents/rs-code-reviewer.md").read_text()
+        head, _, body = agent.partition("\n---\n")
+        self.assertIn("name: rs-code-reviewer\n", head)
+        self.assertIn("allowed-tools:\n  - read\n  - grep\n  - glob\n  - exec\n", head)
+        self.assertIn("  - skill", head)
+        self.assertNotIn("skills:", head)
+        self.assertNotIn("Bash", head)
+        self.assertIn("`rs-review`", body)
+
+    def test_devin_agents_are_rebuilt_from_the_source_on_every_sync(self):
+        run("sync", str(self.project), "development", "--targets", "agents,devin")
+        agent = self.project / ".devin/agents/rs-verifier.md"
+        built = agent.read_text()
+        agent.write_text("stale")
+
+        run("sync", str(self.project), "--force")
+
+        self.assertEqual(agent.read_text(), built)
+
+    def test_remove_takes_the_devin_agents_out_again(self):
+        run("sync", str(self.project), "development", "--targets", "agents,devin")
+
+        run("remove", str(self.project))
+
+        self.assertFalse((self.project / ".devin").exists())
+
     def test_remove_takes_the_agent_hooks_out_again(self):
         run("sync", str(self.project), "validation")
 
@@ -351,8 +380,60 @@ class GlobalTest(ProjectCase):
         self.assertFalse(skill.exists())
         self.assertFalse(harness.GLOBAL_LOCK.exists())
 
+    def test_global_installs_the_agents_for_devin_when_it_is_there(self):
+        devin = Path(HOME.name) / ".config/devin"
+        devin.mkdir(parents=True)
+        self.addCleanup(shutil.rmtree, devin)
+
+        run("global", "development")
+        self.addCleanup(run, "remove", "--global")
+
+        self.assertIn("allowed-tools:", (devin / "agents/rs-verifier.md").read_text())
+
+
+class DevinAgentTest(unittest.TestCase):
+    SOURCE = "---\nname: helper\ndescription: Helps: a lot.\ntools: Read, Bash, Edit\nmodel: haiku\n---\n\nDo the work.\n"
+
+    def test_tools_become_devins_and_the_rest_is_kept(self):
+        built = harness.devin_agent(self.SOURCE)
+
+        self.assertEqual(built, (
+            "---\nname: helper\ndescription: Helps: a lot.\n"
+            "allowed-tools:\n  - read\n  - exec\n  - get_output\n  - kill_shell\n  - edit\n  - apply_patch\n"
+            "model: haiku\n---\n\nDo the work.\n"
+        ))
+
+    def test_preloaded_skills_become_an_instruction_and_the_skill_tool(self):
+        built = harness.devin_agent("---\nname: helper\ntools: Read\nskills: rs-review, playwright\n---\n\nDo the work.\n")
+
+        self.assertIn("  - read\n  - skill\n", built)
+        self.assertNotIn("\nskills:", built)
+        self.assertIn("\n---\n\nBefore anything else load these skills: `rs-review`, `playwright`.\n\nDo the work.\n", built)
+
+    def test_agent_without_a_tool_list_keeps_all_tools(self):
+        built = harness.devin_agent("---\nname: helper\nskills: rs-review\n---\n\nDo the work.\n")
+
+        self.assertNotIn("allowed-tools", built)
+
+    def test_tool_devin_does_not_have_is_refused(self):
+        with self.assertRaises(SystemExit) as refused:
+            harness.devin_agent("---\nname: helper\ntools: Read, Teleport\n---\n\nDo the work.\n")
+
+        self.assertIn("Teleport", str(refused.exception))
+
 
 class CheckTest(unittest.TestCase):
+    def test_agent_with_a_tool_devin_does_not_have_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            agent = Path(tmp) / "helper.md"
+            agent.write_text("---\nname: helper\ndescription: Helps.\ntools: Teleport\n---\n")
+            problems = []
+
+            harness.check_agent_tools(agent, problems)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("Teleport", problems[0])
+
     def test_repo_passes_its_own_check(self):
         problems = []
         names = harness.bundle_names()
