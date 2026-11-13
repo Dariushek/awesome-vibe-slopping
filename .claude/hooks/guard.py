@@ -13,11 +13,17 @@ from pathlib import Path
 
 BLOCKED = 2
 FILE_TOOLS = ("Edit", "Write", "MultiEdit", "NotebookEdit")
-MANAGED_DIRS = ((".githooks",), (".claude", "hooks"))
-SETTINGS = ((".claude", "settings.json"), (".claude", "settings.local.json"))
+# Other agents run the same hook under their own tool names. They cannot ask the user.
+FOREIGN_TOOLS = {"exec": "Bash", "edit": "Edit", "write": "Write", "notebook_edit": "NotebookEdit"}
+PATH_FIELDS = ("file_path", "notebook_path", "path", "target_file", "filename", "file")
+CONTENT_FIELDS = ("content", "contents", "file_text", "text")
+OLD_FIELDS = ("old_string", "old_str", "old_text")
+NEW_FIELDS = ("new_string", "new_str", "new_text")
+MANAGED_DIRS = ((".githooks",), (".claude", "hooks"), (".devin", "hooks"))
+SETTINGS = ((".claude", "settings.json"), (".claude", "settings.local.json"), (".devin", "hooks.v1.json"))
 VALIDATION = (".agents", "validation.json")
 STAGES = ("commit", "push")
-GUARD_COMMAND = ".claude/hooks/guard"
+GUARD_COMMANDS = (".claude/hooks/guard", ".devin/hooks/guard")
 GUARD_PLUGIN = "validation@"
 HOOKS_OFF = "disableAllHooks"
 
@@ -35,10 +41,10 @@ HOOKS_PATH_ALLOWED = (
 )
 CHANGES_FILES = re.compile(r"(^|\s)(rm|mv|cp|chmod|truncate|unlink|tee|sed|ln)\b")
 START = r"(^|[\s/\"'=>])"
-MANAGED_PATH = re.compile(START + r"(\.githooks|\.claude/hooks)(/|\b)")
-SETTINGS_PATH = re.compile(START + r"\.claude/settings(\.local)?\.json\b")
+MANAGED_PATH = re.compile(START + r"(\.githooks|\.claude/hooks|\.devin/hooks)(/|(?![\w.]))")
+SETTINGS_PATH = re.compile(START + r"(\.claude/settings(\.local)?\.json|\.devin/hooks\.v1\.json)\b")
 VALIDATION_PATH = re.compile(START + r"\.agents/validation\.json\b")
-REDIRECT = re.compile(r">\s*[\"']?\S*$|>\s*[\"']?\S*(\.githooks|\.claude|\.agents)/")
+REDIRECT = re.compile(r">\s*[\"']?\S*$|>\s*[\"']?\S*(\.githooks|\.claude|\.agents|\.devin)/")
 
 NO_VERIFY_REASON = (
     "--no-verify skips the validation hooks. Run the commit or push without it "
@@ -48,7 +54,7 @@ HOOKS_PATH_REASON = (
     "core.hooksPath must stay on .githooks. Only `git config core.hooksPath .githooks` is allowed."
 )
 MANAGED_REASON = (
-    ".githooks and .claude/hooks are managed by the harness. Change them in the harness "
+    ".githooks, .claude/hooks and .devin/hooks are managed by the harness. Change them in the harness "
     "repository and sync, never in the project."
 )
 SETTINGS_SHELL_REASON = (
@@ -58,6 +64,9 @@ SETTINGS_SHELL_REASON = (
 GUARD_REASON = "This change would take the validation guard out of the settings. It must stay."
 HOOKS_OFF_REASON = f"{HOOKS_OFF} would switch the validation guard off. It must stay on."
 INVALID_SETTINGS_REASON = "This change would leave the settings as invalid JSON, which switches the guard off."
+UNCHECKED_SETTINGS_REASON = "This change to the agent settings cannot be checked, so it is refused."
+CANNOT_ASK_REASON = " This agent cannot ask for approval here, so stop and ask the user to make the change."
+VALIDATION_UNCHECKED_REASON = "A change to .agents/validation.json needs the user's approval."
 VALIDATION_SHELL_REASON = (
     "This command may change .agents/validation.json. Removing or changing a validation "
     "command needs the user's approval."
@@ -108,8 +117,12 @@ def current_text(path):
         return ""
 
 
+def first(fields, names):
+    return next((str(fields[name]) for name in names if fields.get(name) is not None), "")
+
+
 def replaced(text, edit):
-    old, new = str(edit.get("old_string", "")), str(edit.get("new_string", ""))
+    old, new = first(edit, OLD_FIELDS), first(edit, NEW_FIELDS)
     if not old or old not in text:
         return None
 
@@ -119,7 +132,7 @@ def replaced(text, edit):
 def resulting_text(tool, tool_input, before):
     """The file as the call would leave it, None when the call would fail or cannot be told."""
     if tool == "Write":
-        return str(tool_input.get("content", ""))
+        return first(tool_input, CONTENT_FIELDS) if any(f in tool_input for f in CONTENT_FIELDS) else None
 
     edits = tool_input.get("edits") if tool == "MultiEdit" else [tool_input]
     text = before
@@ -155,7 +168,7 @@ def check_settings(before, after):
         raise Block(HOOKS_OFF_REASON)
 
     was = parsed(before) or {}
-    lost_copy = GUARD_COMMAND in before and GUARD_COMMAND not in after
+    lost_copy = any(command in before and command not in after for command in GUARD_COMMANDS)
     if lost_copy or guard_plugins(was) - guard_plugins(settings):
         raise Block(GUARD_REASON)
 
@@ -182,8 +195,8 @@ def ends_with(parts, tail):
     return tuple(parts[-len(tail):]) == tail
 
 
-def check_file(tool, tool_input):
-    path = str(tool_input.get("file_path") or tool_input.get("notebook_path") or "")
+def check_file(tool, tool_input, foreign):
+    path = first(tool_input, PATH_FIELDS)
     parts = [part for part in re.split(r"[\\/]", path) if part]
     folder = parts[:-1]
     for managed in MANAGED_DIRS:
@@ -196,6 +209,10 @@ def check_file(tool, tool_input):
 
     before = current_text(path)
     after = resulting_text(tool, tool_input, before)
+    if after is None and foreign:
+        # The input fields of other agents are not all known. What cannot be read is not let through.
+        raise Block(UNCHECKED_SETTINGS_REASON) if is_settings else Ask(VALIDATION_UNCHECKED_REASON)
+
     if after is None:
         return
 
@@ -206,13 +223,22 @@ def check_file(tool, tool_input):
 
 
 def check(call):
-    tool = call.get("tool_name")
+    """Run the checks. An agent that cannot put a question to the user is refused instead."""
+    name = call.get("tool_name")
+    foreign = name in FOREIGN_TOOLS
+    tool = FOREIGN_TOOLS.get(name, name)
     tool_input = call.get("tool_input")
     tool_input = tool_input if isinstance(tool_input, dict) else {}
-    if tool == "Bash":
-        check_command(str(tool_input.get("command", "")))
-    elif tool in FILE_TOOLS:
-        check_file(tool, tool_input)
+    try:
+        if tool == "Bash":
+            check_command(str(tool_input.get("command", "")))
+        elif tool in FILE_TOOLS:
+            check_file(tool, tool_input, foreign)
+    except Ask as ask:
+        if foreign:
+            raise Block(f"{ask}{CANNOT_ASK_REASON}") from ask
+
+        raise
 
 
 def main():

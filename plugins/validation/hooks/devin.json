@@ -1,0 +1,13 @@
+{
+  "PreToolUse": [
+    {
+      "matcher": "^(exec|edit|write|apply_patch|notebook_edit)$",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh \"{hooks_dir}/guard\""
+        }
+      ]
+    }
+  ]
+}

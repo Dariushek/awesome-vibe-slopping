@@ -217,6 +217,49 @@ class SyncTest(ProjectCase):
 
         self.assertEqual(self.agent_hook_commands(), ["mine", 'sh "$CLAUDE_PROJECT_DIR/.claude/hooks/guard"'])
 
+    def devin_hooks(self):
+        return json.loads((self.project / ".devin/hooks.v1.json").read_text())
+
+    def test_devin_target_registers_the_guard_under_devins_tool_names(self):
+        run("sync", str(self.project), "validation", "--targets", "agents,devin")
+
+        self.assertTrue((self.project / ".devin/hooks/guard.py").is_file())
+        self.assertFalse((self.project / ".devin/hooks/devin.json").exists())
+        self.assertFalse((self.project / ".claude/hooks").exists())
+        (group,) = self.devin_hooks()["PreToolUse"]
+        self.assertEqual(group["hooks"][0]["command"], 'sh "${DEVIN_PROJECT_DIR:-.}/.devin/hooks/guard"')
+        for tool in ("exec", "edit", "write", "apply_patch"):
+            self.assertRegex(tool, group["matcher"])
+
+    def test_devin_target_keeps_the_projects_own_hooks_and_adds_ours_once(self):
+        own = {"PreToolUse": [{"matcher": "exec", "hooks": [{"type": "command", "command": "mine"}]}]}
+        (self.project / ".devin").mkdir()
+        (self.project / ".devin/hooks.v1.json").write_text(json.dumps(own))
+
+        run("sync", str(self.project), "validation", "--targets", "agents,devin")
+        run("sync", str(self.project))
+
+        commands = [hook["command"] for group in self.devin_hooks()["PreToolUse"] for hook in group["hooks"]]
+        self.assertEqual(commands, ["mine", 'sh "${DEVIN_PROJECT_DIR:-.}/.devin/hooks/guard"'])
+
+    def test_bundle_without_devin_hooks_leaves_nothing_for_devin(self):
+        run("sync", str(self.project), "docs", "--targets", "agents,devin")
+
+        self.assertFalse((self.project / ".devin").exists())
+
+    def test_remove_takes_the_devin_hooks_out_again(self):
+        run("sync", str(self.project), "validation", "--targets", "agents,devin")
+
+        run("remove", str(self.project))
+
+        self.assertFalse((self.project / ".devin").exists())
+
+    def test_new_project_is_synced_for_devin_by_default(self):
+        run("sync", str(self.project), "validation")
+
+        self.assertTrue((self.project / ".devin/hooks.v1.json").is_file())
+        self.assertEqual(self.agent_hook_commands(), ['sh "$CLAUDE_PROJECT_DIR/.claude/hooks/guard"'])
+
     def test_remove_takes_the_agent_hooks_out_again(self):
         run("sync", str(self.project), "validation")
 
@@ -762,6 +805,48 @@ class GuardedFilesTest(ProjectCase):
 
     def test_reading_the_validation_file_is_allowed(self):
         self.assert_allowed(self.call("Bash", command="cat .agents/validation.json"))
+
+    def test_devin_shell_command_skipping_the_hooks_is_blocked(self):
+        self.assert_blocked(self.call("exec", command="git commit --no-verify -m x", shell_id="main"), "--no-verify")
+
+    def test_devin_plain_shell_command_is_allowed(self):
+        self.assert_allowed(self.call("exec", command="git status", shell_id="main"))
+
+    def test_devin_edit_of_a_hook_is_blocked_whatever_the_path_field_is_called(self):
+        hook = str(self.project / ".githooks/validate")
+        for field in ("file_path", "path", "target_file"):
+            self.assert_blocked(self.call("edit", **{field: hook}), ".githooks")
+
+    def test_devin_write_dropping_a_validation_command_is_blocked_since_it_cannot_ask(self):
+        result = self.call("write", file_path=str(self.validation), content='{"commit": ["build"]}')
+
+        self.assert_blocked(result, "ask the user")
+
+    def test_devin_write_adding_a_validation_command_is_allowed(self):
+        content = json.dumps({"commit": ["build", "test", "lint"], "push": ["slow test"]})
+
+        self.assert_allowed(self.call("write", file_path=str(self.validation), content=content))
+
+    def test_devin_edit_of_the_validation_file_that_cannot_be_read_is_blocked(self):
+        self.assert_blocked(self.call("edit", file_path=str(self.validation), unknown_field="x"), "ask the user")
+
+    def test_devin_edit_of_the_settings_that_cannot_be_read_is_blocked(self):
+        self.assert_blocked(self.call("edit", file_path=str(self.settings), unknown_field="x"), "cannot be checked")
+
+    def test_editing_a_devin_hook_script_is_blocked(self):
+        path = str(self.project / ".devin/hooks/guard.py")
+
+        self.assert_blocked(self.call("edit", file_path=path), ".devin/hooks")
+
+    def test_taking_the_guard_out_of_the_devin_hooks_is_blocked(self):
+        registered = {"PreToolUse": [{"matcher": "exec", "hooks": [{"type": "command", "command": "sh .devin/hooks/guard"}]}]}
+        path = self.write(".devin/hooks.v1.json", json.dumps(registered))
+
+        self.assert_blocked(self.call("write", file_path=str(path), content="{}"), "guard")
+        self.assert_blocked(self.call("exec", command="rm .devin/hooks.v1.json"), "settings")
+
+    def test_devin_tool_the_guard_does_not_know_is_allowed(self):
+        self.assert_allowed(self.call("write_to_process", input="y"))
 
     def test_first_validation_file_is_allowed(self):
         self.validation.unlink()

@@ -1,13 +1,14 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "cdd3bdb-dirty",
+  "commit": "23fed4b-dirty",
   "bundles": [
     "git",
     "validation"
   ],
   "targets": [
     "agents",
-    "claude"
+    "claude",
+    "devin"
   ],
   "files": {
     ".githooks/commit-message": "532ae5e52ef684a3dccb522d3593eb1672abf5baccca6154602d80ca6dc5622e",
@@ -17,7 +18,9 @@
     ".githooks/validate": "8d9acf581cca51323cf89ca714b024c6dd8134f5995cf493c9031820d7c4f66a",
     ".agents/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
     ".claude/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
+    ".devin/hooks/guard": "5832424ddd19e322b68916650c726ddb8ce07cb4bf36cd833331071c43723b66",
+    ".devin/hooks/guard.py": "60b388e1c4a3a898942705971ffd3cec8c9af7162274643c4f3ab251857deb24",
     ".claude/hooks/guard": "5832424ddd19e322b68916650c726ddb8ce07cb4bf36cd833331071c43723b66",
-    ".claude/hooks/guard.py": "7abba9ec280178a09921337bb2a6eb0381a403605a585218861917369ddc7d5e"
+    ".claude/hooks/guard.py": "60b388e1c4a3a898942705971ffd3cec8c9af7162274643c4f3ab251857deb24"
   }
 }

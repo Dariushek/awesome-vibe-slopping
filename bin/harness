@@ -40,6 +40,13 @@ HOOKS_MANIFEST = "hooks.json"
 BYTECODE_CACHE = "__pycache__"
 PLUGIN_HOOKS_ROOT = "${CLAUDE_PLUGIN_ROOT}/hooks/"
 PROJECT_HOOKS_ROOT = "$CLAUDE_PROJECT_DIR/.claude/hooks/"
+# Devin CLI and Devin Desktop share one hook format. A bundle opts in with hooks/devin.json.
+DEVIN_HOOKS_DIR = ".devin/hooks"
+DEVIN_HOOKS_FILE = Path(".devin") / "hooks.v1.json"
+DEVIN_MANIFEST = "devin.json"
+DEVIN_HOOKS_PLACEHOLDER = "{hooks_dir}"
+DEVIN_HOOKS_ROOT = "${DEVIN_PROJECT_DIR:-.}/" + DEVIN_HOOKS_DIR
+HOOK_MANIFESTS = (HOOKS_MANIFEST, DEVIN_MANIFEST)
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
 EXCLUSIVE_BUNDLES = [{"architecture", "architecture-light"}]
 FRONTMATTER_FENCE = "---"
@@ -52,6 +59,7 @@ class Target(str, Enum):
     AGENTS = "agents"
     CLAUDE = "claude"
     CLAUDE_PLUGIN = "claude-plugin"
+    DEVIN = "devin"
 
 
 class Overwrite(Enum):
@@ -70,7 +78,7 @@ class Run:
     dry = False
 
 
-DEFAULT_TARGETS = [Target.AGENTS, Target.CLAUDE]
+DEFAULT_TARGETS = [Target.AGENTS, Target.CLAUDE, Target.DEVIN]
 
 
 def bundle_names():
@@ -204,12 +212,12 @@ def render_rules(bundles):
     return "\n\n".join(parts)
 
 
-def add_tree(files, src, dest, skip=None):
+def add_tree(files, src, dest, skip=()):
     if not src.is_dir():
         return
 
     for path in sorted(src.rglob("*")):
-        if not path.is_file() or path.name == skip or BYTECODE_CACHE in path.parts:
+        if not path.is_file() or path.name in skip or BYTECODE_CACHE in path.parts:
             continue
 
         rel = f"{dest}/{path.relative_to(src).as_posix()}"
@@ -230,13 +238,16 @@ def plan_files(bundles, targets, hook_bundles=None):
         if Target.AGENTS in targets:
             add_tree(files, root / "skills", ".agents/skills")
 
+        if Target.DEVIN in targets and (root / "hooks" / DEVIN_MANIFEST).is_file():
+            add_tree(files, root / "hooks", DEVIN_HOOKS_DIR, skip=HOOK_MANIFESTS)
+
         if Target.CLAUDE not in targets:
             continue
 
         for kind in CLAUDE_KINDS:
             add_tree(files, root / kind, f".claude/{kind}")
 
-        add_tree(files, root / "hooks", AGENT_HOOKS_DIR, skip=HOOKS_MANIFEST)
+        add_tree(files, root / "hooks", AGENT_HOOKS_DIR, skip=HOOK_MANIFESTS)
 
     return files
 
@@ -435,22 +446,38 @@ def enable_plugins(project, bundles):
 
 def agent_hook_scripts():
     paths = PLUGINS_DIR.glob("*/hooks/*")
-    return {p.name for p in paths if p.is_file() and p.name != HOOKS_MANIFEST}
+    return {p.name for p in paths if p.is_file() and p.name not in HOOK_MANIFESTS}
 
 
-def is_ours(hook, scripts):
+def is_ours(hook, scripts, hooks_dir):
     command = hook.get("command", "")
-    return any(f"{PROJECT_HOOKS_ROOT}{name}" in command for name in scripts)
+    return any(f"/{hooks_dir}/{name}" in command for name in scripts)
 
 
-def without_ours(groups, scripts):
+def without_ours(groups, scripts, hooks_dir):
     kept = []
     for group in groups:
-        hooks = [h for h in group.get("hooks", []) if not is_ours(h, scripts)]
+        hooks = [h for h in group.get("hooks", []) if not is_ours(h, scripts, hooks_dir)]
         if hooks:
             kept.append({**group, "hooks": hooks})
 
     return kept
+
+
+def merged_hooks(existing, ours, hooks_dir):
+    """The project's own hooks, followed by ours as they are now."""
+    scripts = agent_hook_scripts()
+    hooks = {}
+    for event, groups in existing.items():
+        kept = without_ours(groups, scripts, hooks_dir)
+        if kept:
+            hooks[event] = kept
+
+    for added in ours:
+        for event, groups in added.items():
+            hooks.setdefault(event, []).extend(groups)
+
+    return hooks
 
 
 def bundle_agent_hooks(name):
@@ -466,17 +493,8 @@ def set_agent_hooks(project, bundles):
     """Register the bundles' agent hooks in the project's settings, next to the project's own."""
     path = project / CLAUDE_SETTINGS
     settings = read_json(path)
-    scripts = agent_hook_scripts()
-    hooks = {}
-    for event, groups in settings.get("hooks", {}).items():
-        kept = without_ours(groups, scripts)
-        if kept:
-            hooks[event] = kept
-
-    for name in bundles:
-        for event, groups in bundle_agent_hooks(name).items():
-            hooks.setdefault(event, []).extend(groups)
-
+    ours = [bundle_agent_hooks(name) for name in bundles]
+    hooks = merged_hooks(settings.get("hooks", {}), ours, AGENT_HOOKS_DIR)
     settings["hooks"] = hooks
     if not hooks:
         del settings["hooks"]
@@ -485,6 +503,28 @@ def set_agent_hooks(project, bundles):
         write_json(path, settings)
     else:
         remove(path)
+
+
+def bundle_devin_hooks(name):
+    path = bundle_dir(name) / "hooks" / DEVIN_MANIFEST
+    if not path.is_file():
+        return {}
+
+    return json.loads(read_text(path).replace(DEVIN_HOOKS_PLACEHOLDER, DEVIN_HOOKS_ROOT))
+
+
+def set_devin_hooks(project, bundles):
+    """Register the bundles' hooks for Devin. Its hooks file holds the hooks and nothing else."""
+    path = project / DEVIN_HOOKS_FILE
+    ours = [bundle_devin_hooks(name) for name in bundles]
+    hooks = merged_hooks(read_json(path), ours, DEVIN_HOOKS_DIR)
+    if hooks:
+        write_json(path, hooks)
+        return
+
+    remove(path)
+    if path.parent.is_dir() and not any(path.parent.iterdir()) and not Run.dry:
+        path.parent.rmdir()
 
 
 def check_exclusive(bundles):
@@ -558,6 +598,7 @@ def sync_project(project, requested_bundles, requested_targets, policy):
         enable_plugins(project, bundles)
 
     set_agent_hooks(project, bundles if Target.CLAUDE in targets else [])
+    set_devin_hooks(project, bundles if Target.DEVIN in targets else [])
     everything = with_dependencies(requested, (), Notice.QUIET)
     files = write_files(project, plan_files(bundles, targets, everything), lock.get("files", {}), policy)
     point_hooks(project, files)
@@ -637,6 +678,7 @@ def remove_project(project, policy):
 
     set_agent_hooks(project, [])
     write_files(project, {}, lock.get("files", {}), policy)
+    set_devin_hooks(project, [])
     point_hooks(project, {})
     remove(lock_path)
     register(project, present=False)
@@ -853,7 +895,7 @@ def main(argv=None):
     sync.add_argument("project", nargs="?")
     sync.add_argument("bundles", nargs="*", help=f"defaults to bundles in {LOCK_FILE}")
     sync.add_argument("--all", action="store_true", help="resync every project synced from this machine")
-    sync.add_argument("--targets", help="comma separated: agents, claude, claude-plugin")
+    sync.add_argument("--targets", help="comma separated: agents, claude, claude-plugin, devin")
     add_write_flags(sync, "overwrite files changed in the project")
     sync.set_defaults(func=cmd_sync)
 

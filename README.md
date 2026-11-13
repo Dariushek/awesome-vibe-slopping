@@ -12,7 +12,8 @@ plugins/<bundle>/                 one reusable unit, also a Claude Code plugin
   agents/<name>.md                subagents
   commands/<name>.md              slash commands
   githooks/<hook>                 git hooks, synced to .githooks/ in every target
-  hooks/hooks.json + scripts      agent hooks, Claude Code only
+  hooks/hooks.json + scripts      agent hooks for Claude Code
+  hooks/devin.json                the same hooks for Devin, optional
   .mcp.json                       Claude Code only, plugin delivery only
 .claude-plugin/marketplace.json   lists every bundle
 bin/harness                       sync and validation
@@ -48,9 +49,10 @@ Always writes a managed block into the project's `AGENTS.md`. Everything outside
 |-----------------|--------------------------------------------------------------------------|-------------------------------------------|
 | `agents`        | `.agents/skills/`                                                        | Codex, Cursor, Copilot, Gemini and others |
 | `claude`        | `@AGENTS.md` in `CLAUDE.md`, copies to `.claude/skills,agents,commands,hooks`, agent hooks in `.claude/settings.json` | Claude Code |
+| `devin`         | `.devin/hooks.v1.json` and scripts in `.devin/hooks/`, for bundles with Devin hooks | Devin Desktop, Devin CLI |
 | `claude-plugin` | `@AGENTS.md` in `CLAUDE.md`, enables plugins in `.claude/settings.json`  | Claude Code, auto-updates from GitHub     |
 
-Default `--targets agents,claude`. Use `claude-plugin` instead of `claude` to stop copying and track this repo live.
+Default `--targets agents,claude,devin`. A project synced before a target existed keeps its saved list; pass `--targets` once to change it. Use `claude-plugin` instead of `claude` to stop copying and track this repo live.
 
 `.harness.json` records bundles, targets, source commit and a hash per file. Files changed in the project are skipped on resync unless `--force`.
 
@@ -105,6 +107,8 @@ A command can take only the changed files:
 | Subagents kept to their role: the code reviewer to read-only git, the verifier and the gate runner to no git changes, the task implementer to no push | An agent hook, from the `development` bundle | By agents without tool hooks |
 | Removing or changing a command in `.agents/validation.json` | The same agent hook, which asks the user | By a human, and by agents without tool hooks |
 | All of the above | CI running `.githooks/validate all` | No |
+
+Devin Desktop and Devin CLI share one engine and get the guard through the `devin` target. Devin cannot ask the user from a hook, so a change that needs approval is refused there with a request to ask. Hooks do not run while a workspace is in Restricted Mode. The Hooks tab of the Customize page in Devin Desktop, or `/hooks` in the CLI, shows whether the guard is loaded. The subagent rules need the caller's name, which only Claude Code passes.
 
 Nothing local is a wall: whoever owns the machine can skip a git hook. The agent hook closes that door for the agent, CI closes it for everyone. A project without CI has defaults, not guarantees.
 
