@@ -37,6 +37,7 @@ CLAUDE_KINDS = ("skills", "agents", "commands")
 GIT_HOOKS_DIR = ".githooks"
 AGENT_HOOKS_DIR = ".claude/hooks"
 HOOKS_MANIFEST = "hooks.json"
+BYTECODE_CACHE = "__pycache__"
 PLUGIN_HOOKS_ROOT = "${CLAUDE_PLUGIN_ROOT}/hooks/"
 PROJECT_HOOKS_ROOT = "$CLAUDE_PROJECT_DIR/.claude/hooks/"
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
@@ -208,7 +209,7 @@ def add_tree(files, src, dest, skip=None):
         return
 
     for path in sorted(src.rglob("*")):
-        if not path.is_file() or path.name == skip:
+        if not path.is_file() or path.name == skip or BYTECODE_CACHE in path.parts:
             continue
 
         rel = f"{dest}/{path.relative_to(src).as_posix()}"

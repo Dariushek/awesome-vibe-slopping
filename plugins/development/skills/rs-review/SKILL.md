@@ -11,18 +11,17 @@ If the project has `.agents/overrides/rs-review.md`, read it first. Where it con
 
 1. **Base.** Find the commit the change started from: the plan branch's fork point, `git merge-base HEAD <main branch>`, or the commit before a single change. Ask if unclear.
 2. **Review.** Hand the base and the spec or task path, nothing else, to the rs-code-reviewer agent, or any fresh subagent told to apply the review checklist below. If you cannot run subagents, apply it yourself.
-3. **Verify.** Check each finding against the code. Drop false positives with the reason.
-4. **Triage.**
-   - Fix automatically: a `certain` bug or security hole with a concrete failure case, a missing scenario test, a test that proves nothing, a rule or ADR breach with an obvious fix.
-   - Ask the user: anything that changes behavior beyond the spec, needs a design or security policy choice, contradicts an ADR, or is `uncertain`.
-5. **Fix.** One finding per commit. Write a failing test first where behavior is wrong, then fix, then rs-check-and-commit.
-6. **Re-review.** Run step 2 once more, on the fix commits only. Fix what it confirms. Never run a third round; report what is left.
-7. **Report.** Each finding with its outcome: fixed with commit, dropped with reason, or waiting for the user.
+3. **Record.** Write the findings as returned, each with outcome `open`, and commit them with the commit-message skill, before doing anything about them. A session that stops now loses nothing.
    - When the change has a spec, append a section per round to `REVIEW.md` next to `SPEC.md`. If `docs/changes/` has no record for the spec yet, add one with `Kind: spec` from the rs-change template.
    - When it has a change record in `docs/changes/`, fill its `## Review` section, one subsection per round.
-   - Otherwise report in chat only.
-
-   Commit the report with the commit-message skill.
+   - Otherwise keep them in chat only.
+4. **Verify.** Check each finding against the code. Drop false positives with the reason.
+5. **Triage.**
+   - Fix automatically: a `certain` bug or security hole with a concrete failure case, a missing scenario test, a test that proves nothing, a rule or ADR breach with an obvious fix.
+   - Ask the user: anything that changes behavior beyond the spec, needs a design or security policy choice, contradicts an ADR, or is `uncertain`.
+6. **Fix.** One finding per commit. Write a failing test first where behavior is wrong, then fix, then rs-check-and-commit.
+7. **Re-review.** Run steps 2 and 3 once more, on the fix commits only. Fix what it confirms. Never run a third round; report what is left.
+8. **Report.** Set the outcome of each recorded finding: fixed with commit, dropped with reason, or waiting for the user. No finding stays `open`. Commit the report with the commit-message skill and give the same in chat.
 
 ## Review checklist
 

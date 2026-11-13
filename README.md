@@ -102,6 +102,7 @@ A command can take only the changed files:
 | Commit message format, no AI attribution | `commit-msg`, from the `git` bundle | With `--no-verify` |
 | Spec and plan structure | `.githooks/check-specs`, from the `development` bundle, as a `commit` command | With `--no-verify` |
 | `--no-verify`, changes to `core.hooksPath`, `.githooks/` or `.claude/hooks/`, taking the guard out of the agent settings | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
+| Subagents kept to their role: the code reviewer to read-only git, the verifier and the gate runner to no git changes, the task implementer to no push | An agent hook, from the `development` bundle | By agents without tool hooks |
 | Removing or changing a command in `.agents/validation.json` | The same agent hook, which asks the user | By a human, and by agents without tool hooks |
 | All of the above | CI running `.githooks/validate all` | No |
 

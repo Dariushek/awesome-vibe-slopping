@@ -12,9 +12,10 @@ rs-review reads the code. This skill uses the product. The verifier knows the sp
 ## Steps
 
 1. **Verify.** Hand the spec path, and nothing else, to the rs-verifier agent, or any fresh subagent told to apply the verification checklist below. If you cannot run subagents, apply it yourself.
-2. **Fix.** Each `fail` is a bug: fix it with rs-fix-bug, one per commit. If the spec is wrong instead, stop and propose the change; rs-spec describes how to change an approved spec.
-3. **Verify again.** Run step 1 once more, on the failed items only. Never run a third round; report what is left.
-4. **Report.** Append a section from the template to `REVIEW.md` next to `SPEC.md`. Commit it with the evidence, using the commit-message skill. Give the user the `manual` items as a checklist with steps.
+2. **Record.** Append the results as returned to `REVIEW.md` next to `SPEC.md`, in a section from the template, and commit it with the evidence, before fixing anything. A session that stops now loses nothing.
+3. **Fix.** Each `fail` is a bug: fix it with rs-fix-bug, one per commit. If the spec is wrong instead, stop and propose the change; rs-spec describes how to change an approved spec.
+4. **Verify again.** Run steps 1 and 2 once more, on the failed items only. Never run a third round; report what is left.
+5. **Report.** Set the result of each fixed item in the recorded section, such as `fail, fixed in a1b2c3d`. Commit it with the commit-message skill. Give the user the `manual` items as a checklist with steps.
 
 ## Verification checklist
 

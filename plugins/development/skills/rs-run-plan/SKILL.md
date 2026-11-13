@@ -11,7 +11,13 @@ If the project has `.agents/overrides/rs-run-plan.md`, read it first. Where it c
 
 1. Read PLAN.md and the spec. Both must be `Approved`.
 2. Be on the plan's branch with a clean working tree.
-3. Resume safely: reset leftover `in-progress` tasks to `todo`. Remove worktrees left by an earlier run, and the task branch of every task that is not `blocked`.
+3. Resume safely. An earlier run may have stopped after a task was finished but before it was collected. For each task branch it left, check the last commit: when its body ends with `Task: <ID>` and the task is not `done`, collect it first:
+
+   ```sh
+   git cherry-pick "$(git merge-base HEAD "$branch-$id")..$branch-$id"
+   ```
+
+   Record it as the loop would. Then reset leftover `in-progress` tasks to `todo`, remove the worktrees and the task branch of every task that is not `blocked`.
 4. Add `.worktrees/` to `.git/info/exclude` if it is not there. Worktrees live inside the repository, so sandboxed agents can write to them.
 
 ## Loop

@@ -1,6 +1,7 @@
 ---
 name: rs-task-implementer
 description: Implement one PLAN.md task in a given worktree with the rs-implement-task skill. Use when rs-run-plan dispatches a task.
+tools: Read, Grep, Glob, Edit, Write, Bash, Skill
 skills: rs-implement-task
 ---
 

@@ -4,6 +4,7 @@ import contextlib
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -12,10 +13,14 @@ from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
 
+# The scripts are loaded as modules below. Leave no bytecode next to them.
+sys.dont_write_bytecode = True
+
 REPO = Path(__file__).resolve().parent.parent
 VALIDATE = REPO / "plugins" / "validation" / "githooks" / "validate"
 GUARD = REPO / "plugins" / "validation" / "hooks" / "guard.py"
 CHECK_SPECS = REPO / "plugins" / "development" / "githooks" / "check-specs"
+AGENT_RULES = REPO / "plugins" / "development" / "hooks" / "agent-rules.py"
 COMMIT_MESSAGE = REPO / "plugins" / "git" / "githooks" / "commit-message"
 
 # The harness resolves user-level paths at import, so point home at a sandbox first.
@@ -237,6 +242,17 @@ class SyncTest(ProjectCase):
         out, _ = run("status", str(self.project))
 
         self.assertIn("up to date", out)
+
+    def test_bytecode_caches_next_to_the_hooks_are_not_synced(self):
+        cache = harness.PLUGINS_DIR / "validation" / "githooks" / "__pycache__"
+        cache.mkdir(exist_ok=True)
+        self.addCleanup(shutil.rmtree, cache, ignore_errors=True)
+        (cache / "validate.cpython-313.pyc").write_bytes(b"cache")
+        git(self.project, "init", "-q")
+
+        run("sync", str(self.project), "validation")
+
+        self.assertFalse((self.project / ".githooks/__pycache__").exists())
 
     def test_sync_all_resyncs_registered_projects(self):
         run("sync", str(self.project), "docs")
@@ -920,6 +936,80 @@ class CheckSpecsTest(ProjectCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assert_refused(self.check(), "2025-01-01-old")
+
+
+class AgentRulesTest(unittest.TestCase):
+    BLOCKED = 2
+
+    def run_as(self, agent, command):
+        call = {"tool_name": "Bash", "tool_input": {"command": command}}
+        if agent:
+            call["agent_type"] = agent
+
+        return subprocess.run([sys.executable, str(AGENT_RULES)], input=json.dumps(call), capture_output=True, text=True)
+
+    def assert_blocked(self, agent, command, reason):
+        result = self.run_as(agent, command)
+        self.assertEqual(result.returncode, self.BLOCKED, f"{command}: {result.stderr}")
+        self.assertIn(reason, result.stderr)
+
+    def assert_allowed(self, agent, command):
+        result = self.run_as(agent, command)
+        self.assertEqual(result.returncode, 0, f"{command}: {result.stderr}")
+
+    def test_main_session_is_not_restricted(self):
+        self.assert_allowed(None, "git push origin main")
+
+    def test_unknown_agent_is_not_restricted(self):
+        self.assert_allowed("Explore", "rm -rf build")
+
+    def test_reviewer_may_read_history(self):
+        for command in (
+            "git diff abc123..HEAD",
+            "git --no-pager log --oneline -20 | head -5",
+            "git -C .worktrees/T1 show HEAD:src/app.py",
+            "git diff $(git merge-base HEAD main)..HEAD -- src 2>/dev/null",
+            "git branch --show-current && git status --short",
+            "git log --format='%an <%ae>' -1",
+        ):
+            self.assert_allowed("rs-code-reviewer", command)
+
+    def test_reviewer_may_not_change_the_repository(self):
+        for command in ("git commit -am x", "git checkout main", "git reset --hard HEAD~1", "git branch -D feat", "git stash"):
+            self.assert_blocked("rs-code-reviewer", command, "read-only git")
+
+    def test_reviewer_may_not_run_other_programs(self):
+        for command in ("rm -rf src", "python fix.py", "git log | sh", "npm test"):
+            self.assert_blocked("rs-code-reviewer", command, "read-only git")
+
+    def test_reviewer_may_not_write_files_from_git_output(self):
+        self.assert_blocked("rs-code-reviewer", "git diff > src/app.py", "read-only git")
+        self.assert_blocked("rs-code-reviewer", "git diff --output=src/app.py", "read-only git")
+
+    def test_reviewer_may_not_hide_a_command_inside_another(self):
+        self.assert_blocked("rs-code-reviewer", "git diff $(rm -rf src)", "read-only git")
+
+    def test_reviewer_from_a_plugin_is_held_to_the_same_rules(self):
+        self.assert_blocked("development:rs-code-reviewer", "git commit -am x", "read-only git")
+
+    def test_verifier_may_run_the_app_and_read_history(self):
+        for command in ("npm run dev &", "dotnet test --filter S1", "git log -1", "npx playwright screenshot http://localhost:5000 evidence/verify-S1.png"):
+            self.assert_allowed("rs-verifier", command)
+
+    def test_verifier_may_not_change_the_repository(self):
+        for command in ("git commit -am x", "git add -A && git push", "git checkout -- src"):
+            self.assert_blocked("rs-verifier", command, "git")
+
+    def test_gate_runner_may_run_the_gate_but_not_change_the_repository(self):
+        self.assert_allowed("rs-gate-runner", ".githooks/validate all")
+        self.assert_blocked("rs-gate-runner", "git stash && dotnet test", "git")
+
+    def test_implementer_may_commit_but_not_push(self):
+        self.assert_allowed("rs-task-implementer", "git add -A && git commit -m x")
+        self.assert_blocked("rs-task-implementer", "git commit -m x && git push origin feat", "push")
+
+    def test_push_named_in_a_commit_message_is_allowed(self):
+        self.assert_allowed("rs-task-implementer", "git commit -F - <<'EOF'\nExplain git push\nEOF")
 
 
 if __name__ == "__main__":
