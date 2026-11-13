@@ -61,6 +61,11 @@
       "name": "docs",
       "source": "./plugins/docs",
       "description": "Project documentation: README with what the project is, what to install and how to run it."
+    },
+    {
+      "name": "testing",
+      "source": "./plugins/testing",
+      "description": "Test strategy for applications with an API and a database: integration tests first, fakes only where needed, one end-to-end test per feature."
     }
   ]
 }

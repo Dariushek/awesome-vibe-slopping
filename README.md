@@ -32,6 +32,7 @@ bin/harness                       sync and validation
 | `development`   | Bug fix, small change, spec, UI, plan, tasks, review  |
 | `validation`    | Build, analysis and test gate enforced by git hooks   |
 | `docs`          | `rs-readme`: what to install, how to run and test     |
+| `testing`       | Integration tests first, fakes, one e2e per feature. `rs-test-setup` |
 
 ## Use in a project
 

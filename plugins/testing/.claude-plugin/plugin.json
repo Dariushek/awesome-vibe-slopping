@@ -1,0 +1,8 @@
+{
+  "name": "testing",
+  "version": "0.1.0",
+  "description": "Test strategy for applications with an API and a database: integration tests first, fakes only where needed, one end-to-end test per feature.",
+  "author": {
+    "name": "Dariushek"
+  }
+}
