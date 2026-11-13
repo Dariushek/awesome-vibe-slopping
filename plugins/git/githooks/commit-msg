@@ -1,0 +1,3 @@
+#!/bin/sh
+python=$(command -v python3 || command -v python) || { echo "commit-msg: python not found" >&2; exit 1; }
+exec "$python" "$(dirname "$0")/commit-message" "$1"

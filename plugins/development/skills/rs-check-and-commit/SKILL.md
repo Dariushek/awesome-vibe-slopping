@@ -13,7 +13,7 @@ If the project has `.agents/overrides/rs-check-and-commit.md`, read it first. Wh
 
    ```json
    {
-     "commit": ["<build>", "<static analysis>", "<tests>"],
+     "commit": ["<build>", "<static analysis>", "<tests>", "{python} .githooks/check-specs {changed:docs/specs/*}"],
      "push": ["<slow tests>"],
      "run": {"start": "<start the app>", "url": "<where it answers>"}
    }

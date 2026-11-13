@@ -1,6 +1,6 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "3eff1b9-dirty",
+  "commit": "da42498-dirty",
   "bundles": [
     "git",
     "validation"
@@ -10,11 +10,15 @@
     "claude"
   ],
   "files": {
-    ".agents/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54",
-    ".claude/skills/commit-message/SKILL.md": "db5d2fc1f25cbe244f134f1f50d17ca57c2892b64e4fb62b5f4bede50c650f54",
-    ".githooks/__pycache__/validatecpython-314.pyc": "ced7c7c5d40d7994162f51d220586dc240b5e64823cae26830cb8f4d0a5c3057",
+    ".githooks/commit-message": "532ae5e52ef684a3dccb522d3593eb1672abf5baccca6154602d80ca6dc5622e",
+    ".githooks/commit-msg": "2200f95da4c604b03c17616bb32d43aa1f931ce35b2cedf4fc0ec35837775c65",
+    ".githooks/__pycache__/validatecpython-314.pyc": "d23f8663a89f092b4494d106eeaa6425e41bbcd329cd24d8d8327ddd5d8b70e6",
     ".githooks/pre-commit": "afbf4c4e9d0caba190fd2075d0953730312657d07784248329d52ac8cc2485ad",
     ".githooks/pre-push": "af5b2fcb1b25aaa51b1a67a1500e92a02a05c110cf5bfd5476286cb0a0b3f6b7",
-    ".githooks/validate": "7c717336a5d100639f70a723235721233d480901b6b8d953e176fe22f4ff6591"
+    ".githooks/validate": "8d9acf581cca51323cf89ca714b024c6dd8134f5995cf493c9031820d7c4f66a",
+    ".agents/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
+    ".claude/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
+    ".claude/hooks/guard": "5832424ddd19e322b68916650c726ddb8ce07cb4bf36cd833331071c43723b66",
+    ".claude/hooks/guard.py": "ec82cde7170dcd5ba75c3e8c1edadb2c4cf6e1becf4eed53c731e6d1cb94849d"
   }
 }

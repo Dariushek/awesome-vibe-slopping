@@ -12,7 +12,8 @@ plugins/<bundle>/                 one reusable unit, also a Claude Code plugin
   agents/<name>.md                subagents
   commands/<name>.md              slash commands
   githooks/<hook>                 git hooks, synced to .githooks/ in every target
-  hooks/hooks.json, .mcp.json     Claude Code only, plugin delivery only
+  hooks/hooks.json + scripts      agent hooks, Claude Code only
+  .mcp.json                       Claude Code only, plugin delivery only
 .claude-plugin/marketplace.json   lists every bundle
 bin/harness                       sync and validation
 ```
@@ -24,7 +25,7 @@ bin/harness                       sync and validation
 | `communication` | How agents write and talk. Global, also outside code  |
 | `coding`        | General rules for working with code                   |
 | `engineering`   | Code quality and testing rules                        |
-| `git`           | `commit-message` skill                                |
+| `git`           | `commit-message` skill, enforced by a `commit-msg` hook |
 | `csharp`        | C# language rules                                     |
 | `browser`       | `playwright` skill                                    |
 | `architecture`  | ARCHITECTURE.md, ADRs, architecture tests             |
@@ -46,7 +47,7 @@ Always writes a managed block into the project's `AGENTS.md`. Everything outside
 | Target          | Writes                                                                   | Read by                                   |
 |-----------------|--------------------------------------------------------------------------|-------------------------------------------|
 | `agents`        | `.agents/skills/`                                                        | Codex, Cursor, Copilot, Gemini and others |
-| `claude`        | `@AGENTS.md` in `CLAUDE.md`, copies to `.claude/skills,agents,commands`  | Claude Code                               |
+| `claude`        | `@AGENTS.md` in `CLAUDE.md`, copies to `.claude/skills,agents,commands,hooks`, agent hooks in `.claude/settings.json` | Claude Code |
 | `claude-plugin` | `@AGENTS.md` in `CLAUDE.md`, enables plugins in `.claude/settings.json`  | Claude Code, auto-updates from GitHub     |
 
 Default `--targets agents,claude`. Use `claude-plugin` instead of `claude` to stop copying and track this repo live.
@@ -90,6 +91,32 @@ A command can take only the changed files:
 ```
 
 `{changed}` is replaced with every changed file, `{changed:<patterns>}` with those matching one of the comma-separated patterns. `commit` compares the working tree with `HEAD`, `push` with the upstream branch, or `origin/HEAD` when there is none. Deleted files are left out, untracked ones included. A command with no matching file is skipped, and a list too long for one command line is split over several runs. Use it for formatters and per-file linters; builds and tests stay whole.
+
+`{python}` is replaced with the interpreter running the hook, so a script runs the same on every system: `{python} .githooks/check-specs {changed:docs/specs/*}`.
+
+### What enforces what
+
+| Check | Enforced by | Can be skipped |
+|-------|-------------|----------------|
+| Build, analysis, tests | `pre-commit`, `pre-push` | With `--no-verify` |
+| Commit message format, no AI attribution | `commit-msg`, from the `git` bundle | With `--no-verify` |
+| Spec and plan structure | `.githooks/check-specs`, from the `development` bundle, as a `commit` command | With `--no-verify` |
+| `--no-verify`, changes to `core.hooksPath` or `.githooks/` | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
+| All of the above | CI running `.githooks/validate all` | No |
+
+Nothing local is a wall: whoever owns the machine can skip a git hook. The agent hook closes that door for the agent, CI closes it for everyone. A project without CI has defaults, not guarantees.
+
+A minimal CI job, with the project's toolchain set up before the last step:
+
+```yaml
+steps:
+  - uses: actions/checkout@v7
+    with:
+      fetch-depth: 0
+  - run: python3 .githooks/validate all
+```
+
+Git hooks reach a project even when their bundle is installed globally, since a global install cannot deliver them.
 
 An optional `run` entry, `{"start": "...", "url": "..."}`, tells agents how to start the app for checks. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
 

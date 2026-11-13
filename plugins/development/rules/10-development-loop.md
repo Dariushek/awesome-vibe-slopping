@@ -12,4 +12,6 @@ Every finished change gets rs-review. rs-fix-bug, rs-change and rs-run-plan run 
 
 Every finished plan also gets rs-verify, after rs-review. rs-run-plan runs it itself; after tasks run by hand, run it after the last one.
 
+`.githooks/check-specs` checks the structure of specs and plans: statuses, IDs, verification methods and that every scenario is covered by a task. It belongs in the `commit` commands of `.agents/validation.json`.
+
 Every change leaves a record in `docs/changes/`: what the problem was, what was done and the review.

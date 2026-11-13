@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+"""Check the structure of specifications and plans.
+
+Usage: check-specs [path ...]
+
+Each path is a spec folder or a file inside one. Without paths, every folder
+under docs/specs is checked. Prints one line per problem and exits 1 on any.
+"""
+
+import re
+import sys
+from collections import Counter
+from pathlib import Path
+
+SPECS_DIR = Path("docs") / "specs"
+SPEC_FILE = "SPEC.md"
+PLAN_FILE = "PLAN.md"
+APPROVED = "Approved"
+STATUSES = ("Draft", APPROVED)
+UNKNOWN = "???"
+METHODS = ("test", "command", "agent check", "manual")
+DEFAULT_METHOD = "test"
+TASK_STATUSES = ("todo", "in-progress", "verify", "done", "blocked")
+STARTED = ("in-progress", "verify", "done")
+FINISHED = ("verify", "done")
+MODELS = ("small", "default")
+REQUIRED_FIELDS = ("Goal", "Files", "Model")
+
+HEADER_FIELD = re.compile(r"^- (\w[\w ]*):[ \t]*(.*)$", re.MULTILINE)
+SCENARIO = re.compile(r"^### (S\d+)\.", re.MULTILINE)
+HEADING = re.compile(r"^#{1,3} ", re.MULTILINE)
+ITEM = re.compile(r"^- ([CN]\d+):", re.MULTILINE)
+NEXT_ITEM = re.compile(r"^(- |#|\s*$)", re.MULTILINE)
+VERIFIED_BY = re.compile(r"Verified by:[ \t]*(.*)", re.IGNORECASE)
+TASK_ROW = re.compile(r"^\|\s*(T\d+)\s*\|(.*)\|\s*$", re.MULTILINE)
+TASK_SECTION = re.compile(r"^## (T\d+)\.", re.MULTILINE)
+TASK_ID = re.compile(r"\bT\d+\b")
+COVERED = {"Scenarios": re.compile(r"\bS\d+\b"), "Requirements": re.compile(r"\bN\d+\b"), "Checks": re.compile(r"\bC\d+\b")}
+
+
+def header(text):
+    """Fields of the list right under the title, before the first section."""
+    end = re.search(r"^## ", text, re.MULTILINE)
+    return dict(HEADER_FIELD.findall(text[:end.start()] if end else text))
+
+
+def blocks(text, pattern, stop):
+    """Text of each match of `pattern`, up to the next match of `stop`, by ID."""
+    found = []
+    for match in pattern.finditer(text):
+        end = stop.search(text, match.end())
+        found.append((match.group(1), text[match.end():end.start() if end else len(text)]))
+
+    return found
+
+
+def duplicates(ids):
+    return [name for name, count in Counter(ids).items() if count > 1]
+
+
+def scenario_problem(name, body):
+    stated = VERIFIED_BY.search(body)
+    if not stated:
+        return None
+
+    value = stated.group(1).strip()
+    method = next((m for m in METHODS if value.lower().startswith(m)), None)
+    if not method:
+        return f"{name}: `Verified by` must start with one of {', '.join(METHODS)}"
+
+    if method != DEFAULT_METHOD and not value[len(method):].strip(" .:,"):
+        return f"{name}: `Verified by: {method}` needs its reason or steps"
+
+    return None
+
+
+def check_spec(text):
+    """Problems of a spec and the IDs it defines, by kind."""
+    problems = []
+    status = header(text).get("Status", "")
+    if status not in STATUSES:
+        problems.append(f"Status must be {' or '.join(STATUSES)}")
+
+    scenarios = blocks(text, SCENARIO, HEADING)
+    items = blocks(text, ITEM, NEXT_ITEM)
+    ids = [name for name, _ in scenarios + items]
+    problems += [f"{name} is used twice" for name in duplicates(ids)]
+    problems += [f"{name} has no `Verified by`" for name, body in items if not VERIFIED_BY.search(body)]
+    problems += filter(None, (scenario_problem(name, body) for name, body in scenarios))
+
+    if status == APPROVED:
+        for number, line in enumerate(text.splitlines(), start=1):
+            if UNKNOWN in line:
+                problems.append(f"line {number}: {UNKNOWN} in an approved spec")
+
+    return problems, status, set(ids)
+
+
+def table_tasks(text):
+    """Dependencies and status of each task in the table, by ID."""
+    tasks = {}
+    for name, rest in TASK_ROW.findall(text):
+        cells = [cell.strip() for cell in rest.split("|")]
+        tasks[name] = (TASK_ID.findall(cells[-2]) if len(cells) > 1 else [], cells[-1])
+
+    return tasks
+
+
+def in_cycle(name, tasks, path=()):
+    if name in path:
+        return True
+
+    return any(in_cycle(d, tasks, (*path, name)) for d in tasks.get(name, ([], ""))[0])
+
+
+def table_problems(tasks):
+    problems = []
+    for name, (depends, status) in tasks.items():
+        if status not in TASK_STATUSES:
+            problems.append(f"{name} has status {status}, use one of {', '.join(TASK_STATUSES)}")
+
+        for dependency in depends:
+            if dependency not in tasks:
+                problems.append(f"{name} depends on {dependency}, which is no task")
+            elif status in STARTED and tasks[dependency][1] not in FINISHED:
+                problems.append(f"{name} is {status} but {dependency} is {tasks[dependency][1]}")
+
+    looping = sorted(name for name in tasks if in_cycle(name, tasks))
+    if looping:
+        problems.append(f"{', '.join(looping)} depend on each other")
+
+    return problems
+
+
+def section_problems(name, fields):
+    problems = [f"{name} has no {field}" for field in REQUIRED_FIELDS if not fields.get(field)]
+    if fields.get("Model") and fields["Model"] not in MODELS:
+        problems.append(f"{name}: Model must be {' or '.join(MODELS)}")
+
+    return problems
+
+
+def coverage_problems(sections, spec_ids):
+    problems = []
+    covered = Counter()
+    for name, fields in sections.items():
+        for field, pattern in COVERED.items():
+            for item in set(pattern.findall(fields.get(field, ""))):
+                covered[item] += 1
+                if item not in spec_ids:
+                    problems.append(f"{name} names {item}, which the spec lacks")
+
+    for item in sorted(spec_ids):
+        if not covered[item]:
+            problems.append(f"{item} is covered by no task")
+        elif item.startswith("S") and covered[item] > 1:
+            problems.append(f"{item} is covered by {covered[item]} tasks")
+
+    return problems
+
+
+def check_plan(text, spec_text, spec_status, spec_ids):
+    problems = []
+    status = header(text).get("Status", "")
+    if status not in STATUSES:
+        problems.append(f"Status must be {' or '.join(STATUSES)}")
+
+    tasks = table_tasks(text)
+    sections = {name: dict(HEADER_FIELD.findall(body)) for name, body in blocks(text, TASK_SECTION, re.compile(r"^## ", re.MULTILINE))}
+    problems += [f"{name} is in the table but has no section" for name in tasks if name not in sections]
+    problems += [f"{name} has a section but is not in the table" for name in sections if name not in tasks]
+    problems += table_problems(tasks)
+    for name, fields in sections.items():
+        problems += section_problems(name, fields)
+
+    if status == APPROVED:
+        if spec_status != APPROVED:
+            problems.append("plan is Approved but the spec is not Approved")
+
+        if not header(spec_text).get("Prototype"):
+            problems.append("plan is Approved but the spec's Prototype is not set")
+
+        problems += coverage_problems(sections, spec_ids)
+
+    return problems
+
+
+def spec_folder(path):
+    folder = path if path.is_dir() else path.parent
+    for candidate in (folder, *folder.parents):
+        if (candidate / SPEC_FILE).is_file():
+            return candidate
+
+    return None
+
+
+def folders(arguments):
+    if not arguments:
+        return sorted(path.parent for path in SPECS_DIR.glob(f"*/{SPEC_FILE}"))
+
+    found = {spec_folder(Path(argument)) for argument in arguments}
+    return sorted(folder for folder in found if folder)
+
+
+def read(path):
+    return path.read_text(encoding="utf-8")
+
+
+def main():
+    failed = False
+    for folder in folders(sys.argv[1:]):
+        spec_text = read(folder / SPEC_FILE)
+        problems, status, ids = check_spec(spec_text)
+        reports = [(folder / SPEC_FILE, problems)]
+        if (folder / PLAN_FILE).is_file():
+            reports.append((folder / PLAN_FILE, check_plan(read(folder / PLAN_FILE), spec_text, status, ids)))
+
+        for path, found in reports:
+            for problem in found:
+                failed = True
+                print(f"{path.as_posix()}: {problem}", file=sys.stderr)
+
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

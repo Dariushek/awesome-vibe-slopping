@@ -11,7 +11,7 @@ If the project has `.agents/overrides/rs-plan.md`, read it first. Where it confl
 
 1. Read the spec. If its status is not `Approved`, or its `Prototype:` line is empty, stop and say so.
 2. Split the work into tasks. Write `PLAN.md` next to `SPEC.md` from the template.
-3. Show it to the user. Iterate until they approve. Then set `Status: Approved`.
+3. Show it to the user. Iterate until they approve. Then set `Status: Approved`. Run `.githooks/check-specs <spec folder>` and fix what it reports.
 4. Create the branch named in the plan from the current branch. Commit the whole spec folder to it, `prototype/` included, with everything rs-spec and rs-ui-design wrote outside it, such as ADRs and changes to ARCHITECTURE.md or AGENTS.md. The working tree must end clean; rs-run-plan needs that.
 5. Tell the user the two ways on: `rs-implement-task T1` and onward by hand, or `rs-run-plan` for all of it.
 

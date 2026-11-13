@@ -13,11 +13,13 @@ If the project has `.agents/overrides/commit-message.md`, read it first. Where i
 4. Capitalize the first letter of the subject.
 5. No period at the end of the subject.
 6. Imperative mood. It must complete: "If applied, this commit will ...".
-7. Wrap the body at 72 characters.
+7. Body lines are at most 200 characters.
 8. Body explains what and why, not how. The code shows the how.
 9. No AI attribution: no Co-Authored-By trailer, no "Generated with" line.
 
 Get the branch with `git branch --show-current`.
+
+The `commit-msg` hook refuses a message that breaks rule 1, 2, 3, 4, 5, 7 or 9. Fix the message, never bypass the hook. With a project override it checks rule 9 only.
 
 Example:
 

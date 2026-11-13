@@ -35,6 +35,10 @@ PROJECTS_FILE = CONFIG_DIR / "projects.json"
 
 CLAUDE_KINDS = ("skills", "agents", "commands")
 GIT_HOOKS_DIR = ".githooks"
+AGENT_HOOKS_DIR = ".claude/hooks"
+HOOKS_MANIFEST = "hooks.json"
+PLUGIN_HOOKS_ROOT = "${CLAUDE_PLUGIN_ROOT}/hooks/"
+PROJECT_HOOKS_ROOT = "$CLAUDE_PROJECT_DIR/.claude/hooks/"
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
 EXCLUSIVE_BUNDLES = [{"architecture", "architecture-light"}]
 FRONTMATTER_FENCE = "---"
@@ -199,12 +203,12 @@ def render_rules(bundles):
     return "\n\n".join(parts)
 
 
-def add_tree(files, src, dest):
+def add_tree(files, src, dest, skip=None):
     if not src.is_dir():
         return
 
     for path in sorted(src.rglob("*")):
-        if not path.is_file():
+        if not path.is_file() or path.name == skip:
             continue
 
         rel = f"{dest}/{path.relative_to(src).as_posix()}"
@@ -214,11 +218,14 @@ def add_tree(files, src, dest):
         files[rel] = path.read_bytes()
 
 
-def plan_files(bundles, targets):
+def plan_files(bundles, targets, hook_bundles=None):
+    """Files to write. Git hooks also come from `hook_bundles`, which a global install cannot deliver."""
     files = {}
+    for name in hook_bundles or bundles:
+        add_tree(files, bundle_dir(name) / "githooks", GIT_HOOKS_DIR)
+
     for name in bundles:
         root = bundle_dir(name)
-        add_tree(files, root / "githooks", GIT_HOOKS_DIR)
         if Target.AGENTS in targets:
             add_tree(files, root / "skills", ".agents/skills")
 
@@ -227,6 +234,8 @@ def plan_files(bundles, targets):
 
         for kind in CLAUDE_KINDS:
             add_tree(files, root / kind, f".claude/{kind}")
+
+        add_tree(files, root / "hooks", AGENT_HOOKS_DIR, skip=HOOKS_MANIFEST)
 
     return files
 
@@ -423,6 +432,60 @@ def enable_plugins(project, bundles):
     write_json(path, settings)
 
 
+def agent_hook_scripts():
+    paths = PLUGINS_DIR.glob("*/hooks/*")
+    return {p.name for p in paths if p.is_file() and p.name != HOOKS_MANIFEST}
+
+
+def is_ours(hook, scripts):
+    command = hook.get("command", "")
+    return any(f"{PROJECT_HOOKS_ROOT}{name}" in command for name in scripts)
+
+
+def without_ours(groups, scripts):
+    kept = []
+    for group in groups:
+        hooks = [h for h in group.get("hooks", []) if not is_ours(h, scripts)]
+        if hooks:
+            kept.append({**group, "hooks": hooks})
+
+    return kept
+
+
+def bundle_agent_hooks(name):
+    path = bundle_dir(name) / "hooks" / HOOKS_MANIFEST
+    if not path.is_file():
+        return {}
+
+    text = read_text(path).replace(PLUGIN_HOOKS_ROOT, PROJECT_HOOKS_ROOT)
+    return json.loads(text).get("hooks", {})
+
+
+def set_agent_hooks(project, bundles):
+    """Register the bundles' agent hooks in the project's settings, next to the project's own."""
+    path = project / CLAUDE_SETTINGS
+    settings = read_json(path)
+    scripts = agent_hook_scripts()
+    hooks = {}
+    for event, groups in settings.get("hooks", {}).items():
+        kept = without_ours(groups, scripts)
+        if kept:
+            hooks[event] = kept
+
+    for name in bundles:
+        for event, groups in bundle_agent_hooks(name).items():
+            hooks.setdefault(event, []).extend(groups)
+
+    settings["hooks"] = hooks
+    if not hooks:
+        del settings["hooks"]
+
+    if settings:
+        write_json(path, settings)
+    else:
+        remove(path)
+
+
 def check_exclusive(bundles):
     for group in EXCLUSIVE_BUNDLES:
         if group <= set(bundles):
@@ -493,7 +556,9 @@ def sync_project(project, requested_bundles, requested_targets, policy):
     if Target.CLAUDE_PLUGIN in targets:
         enable_plugins(project, bundles)
 
-    files = write_files(project, plan_files(bundles, targets), lock.get("files", {}), policy)
+    set_agent_hooks(project, bundles if Target.CLAUDE in targets else [])
+    everything = with_dependencies(requested, (), Notice.QUIET)
+    files = write_files(project, plan_files(bundles, targets, everything), lock.get("files", {}), policy)
     point_hooks(project, files)
     write_json(lock_path, {
         "source": GITHUB_REPO,
@@ -569,6 +634,7 @@ def remove_project(project, policy):
     if Target.CLAUDE_PLUGIN.value in lock.get("targets", []):
         enable_plugins(project, [])
 
+    set_agent_hooks(project, [])
     write_files(project, {}, lock.get("files", {}), policy)
     point_hooks(project, {})
     remove(lock_path)
@@ -628,7 +694,8 @@ def project_status(project):
 
     bundles = with_dependencies(lock.get("bundles", []), global_bundles(), Notice.QUIET)
     targets = pick_targets(None, lock)
-    planned = plan_files(bundles, targets)
+    everything = with_dependencies(lock.get("bundles", []), (), Notice.QUIET)
+    planned = plan_files(bundles, targets, everything)
     print_status(str(project), project, lock, planned, [project / AGENTS_FILE], render_rules(bundles))
 
 

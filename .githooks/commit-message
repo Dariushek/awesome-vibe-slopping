@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""Check a commit message against the house rules. Called by the commit-msg hook."""
+
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+OVERRIDE = Path(".agents") / "overrides" / "commit-message.md"
+SUBJECT_LIMIT = 72
+BODY_LIMIT = 200
+SCISSORS = "# ------------------------ >8 ------------------------"
+UNCHECKED = ("Merge ", "Revert ", "fixup! ", "squash! ", "amend! ")
+# A task number opens the last part of a branch name: feature/4821-token-refresh.
+TASK_NUMBER = re.compile(r"(?:^|/)#?(\d+)(?:[-_][^/]*)?$")
+TASK_PREFIX = re.compile(r"^#\d+ ")
+# Git's own comments start with "#". A subject may too, as a task number: "#4821 Retry".
+COMMENT = re.compile(r"^#(?!\d)")
+CO_AUTHOR = re.compile(r"^co-authored-by:", re.IGNORECASE)
+GENERATED = re.compile(r"generated with", re.IGNORECASE)
+
+
+def message_lines(text):
+    lines = []
+    for line in text.splitlines():
+        if line == SCISSORS:
+            break
+
+        if not COMMENT.match(line):
+            lines.append(line.rstrip())
+
+    while lines and not lines[-1]:
+        lines.pop()
+
+    while lines and not lines[0]:
+        lines.pop(0)
+
+    return lines
+
+
+def branch_task():
+    result = subprocess.run(["git", "branch", "--show-current"], capture_output=True, text=True)
+    match = TASK_NUMBER.search(result.stdout.strip())
+    return match.group(1) if match else None
+
+
+def attribution_problems(lines):
+    problems = []
+    if any(CO_AUTHOR.match(line) for line in lines):
+        problems.append("no Co-Authored-By trailer")
+
+    if any(GENERATED.search(line) for line in lines):
+        problems.append('no "Generated with" line')
+
+    return problems
+
+
+def can_wrap(line):
+    return " " in line.strip() and "://" not in line
+
+
+def format_problems(lines):
+    problems = []
+    subject = lines[0]
+    task = branch_task()
+    if task and not subject.startswith(f"#{task} "):
+        problems.append(f"start the subject with the task number of the branch: #{task}")
+
+    if len(subject) > SUBJECT_LIMIT:
+        problems.append(f"subject has {len(subject)} characters, the limit is {SUBJECT_LIMIT}")
+
+    title = TASK_PREFIX.sub("", subject)
+    if title[:1].isalpha() and not title[:1].isupper():
+        problems.append("start the subject with a capital letter")
+
+    if subject.endswith("."):
+        problems.append("no period at the end of the subject")
+
+    if len(lines) > 1 and lines[1]:
+        problems.append("separate subject and body with one blank line")
+
+    if any(len(line) > BODY_LIMIT and can_wrap(line) for line in lines[1:]):
+        problems.append(f"keep body lines within {BODY_LIMIT} characters")
+
+    return problems
+
+
+def main():
+    lines = message_lines(Path(sys.argv[1]).read_text(encoding="utf-8", errors="replace"))
+    if not lines or lines[0].startswith(UNCHECKED):
+        return 0
+
+    problems = attribution_problems(lines)
+    if not OVERRIDE.is_file():
+        problems += format_problems(lines)
+
+    for problem in problems:
+        print(f"commit-msg: {problem}", file=sys.stderr)
+
+    return 1 if problems else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
