@@ -196,6 +196,10 @@ def load_config(path):
 
 
 def main():
+    # A console that cannot encode a file name must not stop the run.
+    for stream in (sys.stdout, sys.stderr):
+        stream.reconfigure(errors="backslashreplace")
+
     stage = sys.argv[1] if len(sys.argv) > 1 else "all"
     if stage != "all" and stage not in STAGES:
         sys.exit(f"validate: unknown stage {stage}, use {', '.join(STAGES)} or all")

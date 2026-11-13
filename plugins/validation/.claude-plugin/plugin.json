@@ -1,6 +1,6 @@
 {
   "name": "validation",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Validation gate: project config with build, analysis and test commands, enforced by git hooks.",
   "author": {
     "name": "Dariushek"

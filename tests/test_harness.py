@@ -268,11 +268,11 @@ class ValidateHookTest(ProjectCase):
         git(self.project, "init", "-q")
         (self.project / ".agents").mkdir()
 
-    def validate(self, config, stage="commit"):
+    def validate(self, config, stage="commit", env=None):
         (self.project / ".agents/validation.json").write_text(config)
         return subprocess.run(
             [sys.executable, str(VALIDATE), stage],
-            cwd=self.project, capture_output=True, text=True,
+            cwd=self.project, capture_output=True, text=True, env=env,
         )
 
     def command(self, code):
@@ -333,6 +333,15 @@ class ValidateHookTest(ProjectCase):
 
         self.assertIn("got ['a&b.py', 'caf\\xe9 menu.py']", result.stdout)
 
+    def test_file_name_the_console_cannot_print_does_not_stop_the_run(self):
+        (self.project / "za\u017c\u00f3\u0142\u0107.py").write_text("x")
+        console = {**os.environ, "PYTHONIOENCODING": "ascii"}
+
+        result = self.validate(json.dumps({"commit": [self.echo("{changed:*.py}")]}), env=console)
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("got ['za\\u017c\\xf3\\u0142\\u0107.py']", result.stdout)
+
     def test_changed_placeholder_without_pattern_gets_every_changed_file(self):
         (self.project / "old.py").write_text("x")
         self.commit_all()
@@ -379,14 +388,17 @@ class ExpandTest(unittest.TestCase):
         self.addCleanup(setattr, validate, "MAX_ARGUMENTS_LENGTH", limit)
         validate.MAX_ARGUMENTS_LENGTH = 8
 
-        lines = validate.expand("lint {changed}", ["aaaa.py", "bbbb.py", "cccc.py"])
+        files = ["aaaa.py", "bbbb.py", "cccc.py"]
 
-        self.assertEqual(lines, ["lint aaaa.py", "lint bbbb.py", "lint cccc.py"])
+        lines = validate.expand("lint {changed}", files)
+
+        self.assertEqual(lines, [f"lint {validate.quote([name])}" for name in files])
 
     def test_each_placeholder_gets_its_own_files(self):
         lines = validate.expand("lint {changed:*.py} --css {changed:*.css,*.scss}", ["a.py", "b.css", "c.scss"])
 
-        self.assertEqual(lines, ["lint a.py --css b.css c.scss"])
+        python, styles = validate.quote(["a.py"]), validate.quote(["b.css", "c.scss"])
+        self.assertEqual(lines, [f"lint {python} --css {styles}"])
 
     def test_posix_shell_gets_a_name_with_a_space_as_one_argument(self):
         self.assertEqual(validate.quote(["my file.py", "a.py"], windows=False), "'my file.py' a.py")
