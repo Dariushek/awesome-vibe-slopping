@@ -19,7 +19,7 @@ The result: a fixture every test builds on, one passing test per kind and a `## 
    - the UI, if any, and how the app starts.
 2. **Decide.** Apply the test strategy rules:
    - entry point: the web API, or the module API when there is no host;
-   - database: the real engine in a container with in-memory storage, an in-memory provider, a hand-written fake;
+   - database: the real engine in a container when the project uses containers, otherwise the in-memory provider of the ORM, or a hand-written fake when the app uses plain SQL;
    - fakes: one per external service that cannot run locally;
    - end-to-end: the browser test tool of the stack, and how the suite starts the app.
 3. **Ask.** One round of at most five questions, numbered `Q1` and onward, on what the code does not answer. Stop and wait for the answers.

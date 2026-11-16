@@ -3,7 +3,8 @@
 - Before writing tests, read the `## Testing` section of the project's AGENTS.md. If it is missing, suggest rs-test-setup to the user.
 - Test behavior through the public API: the web API when there is one, otherwise the public API of the module.
 - The default test is an integration test: the API with its database.
-- Database, the first that fits: the real engine in a container with in-memory storage, an in-memory provider, a hand-written fake.
+- Database, when the project uses containers: the real engine in a container with in-memory storage.
+- Database, when it does not: the in-memory provider of the ORM, or a hand-written fake behind the repository interface when the app uses plain SQL. Never add containers for the tests alone.
 - Fake only what cannot run locally, such as message queues and cloud services. Fake at the boundary, with one fake per service shared by all tests.
 - Test internals directly only when the public API cannot reach the case or makes the test awkward. Say why in the test.
 - Every test owns its data. Tests pass alone, in any order and in parallel.

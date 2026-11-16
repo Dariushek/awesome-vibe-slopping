@@ -2,7 +2,7 @@
 
 Use the test framework the project has. For a new test project use TUnit.
 
-When `dotnet new list` shows the `RS integration tests` template, create the test project with it and skip to the first test: it brings the container setup and the fixture below. Add the project with `dotnet sln add <project> --include-references false`.
+When the project uses containers and `dotnet new list` shows the `RS integration tests` template, create the test project with it and skip to the first test: it brings the container setup and the fixture below. Add the project with `dotnet sln add <project> --include-references false`.
 
 The template needs a web API project to test. When the solution has none yet and `dotnet new list` shows the `RS web API` template, create it with that one, never with the stock `webapi`: it starts empty, with problem details and a health endpoint.
 
@@ -159,10 +159,13 @@ internal class BookRentingTests : ApiFixture
 
 ## Without containers
 
+For a project that does not use containers. The fixture and the tests keep the shape above, only the database differs.
+
 - EF Core: `UseInMemoryDatabase(name, root)`. Pass one shared `InMemoryDatabaseRoot` to every call, or scopes stop seeing each other's rows.
 - Compute the database name in a variable before the options lambda. The lambda runs more than once, so an inline `Guid.NewGuid()` gives a different database each time.
-- The in-memory provider checks no constraints and runs no real SQL. Raw SQL, transactions and unique indexes need the container tier.
-- No EF Core: a hand-written fake repository behind the repository interface.
+- The in-memory provider checks no constraints and runs no real SQL. Unique indexes, transactions and raw SQL stay untested. Name them under `## Testing` in AGENTS.md.
+- Plain SQL: a hand-written fake repository behind the repository interface, holding its rows in a dictionary. Register it as a singleton in place of the real one, so each test's app has its own store.
+- The fake enforces the rules the database would, such as uniqueness, or the tests pass on behavior production rejects.
 
 ## End-to-end
 
