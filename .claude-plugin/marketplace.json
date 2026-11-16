@@ -20,7 +20,7 @@
     {
       "name": "engineering",
       "source": "./plugins/engineering",
-      "description": "Code quality and testing rules."
+      "description": "Code quality, testing and local infrastructure rules."
     },
     {
       "name": "git",

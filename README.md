@@ -25,7 +25,7 @@ bin/harness                       sync and validation
 |-----------------|-------------------------------------------------------|
 | `communication` | How agents write and talk. Global, also outside code  |
 | `coding`        | General rules for working with code                   |
-| `engineering`   | Code quality and testing rules                        |
+| `engineering`   | Code quality, testing and local infrastructure rules  |
 | `git`           | `commit-message` skill, enforced by a `commit-msg` hook |
 | `csharp`        | C# language rules                                     |
 | `browser`       | `playwright` skill                                    |
