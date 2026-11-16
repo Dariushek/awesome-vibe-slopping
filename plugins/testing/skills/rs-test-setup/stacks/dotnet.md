@@ -4,6 +4,8 @@ Use the test framework the project has. For a new test project use TUnit.
 
 When `dotnet new list` shows the `RS integration tests` template, create the test project with it and skip to the first test: it brings the container setup and the fixture below. Add the project with `dotnet sln add <project> --include-references false`.
 
+The template needs a web API project to test. When the solution has none yet and `dotnet new list` shows the `RS web API` template, create it with that one, never with the stock `webapi`: it starts empty, with problem details and a health endpoint.
+
 ## Parts
 
 | Part | Tool |
