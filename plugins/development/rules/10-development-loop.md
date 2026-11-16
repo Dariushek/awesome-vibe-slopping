@@ -4,7 +4,7 @@ Pick the path before writing code:
 
 - Broken behavior: rs-fix-bug.
 - A small, clear change with no new business rules: rs-change.
-- Anything else: rs-spec, then rs-ui-design if users see the change, then rs-plan. Then run each task with rs-implement-task, or all of them with rs-run-plan.
+- Anything else: rs-spec, then rs-ui-design if users see the change, then rs-plan. Then run each task with rs-implement-task, or all of them with rs-run-plan. With several approved plans, rs-run-plan runs them one after another.
 
 When a light path hits its stop conditions, switch to rs-spec.
 
