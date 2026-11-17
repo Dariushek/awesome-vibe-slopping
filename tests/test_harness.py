@@ -142,7 +142,14 @@ class SyncTest(ProjectCase):
 
         out, _ = run("sync", str(self.project), "coding")
 
-        self.assertIn("warning: coding is installed globally", out)
+        self.assertIn("warning: coding is installed globally, its rules will apply twice", out)
+
+    def test_global_bundle_with_skills_warns(self):
+        harness.write_json(harness.GLOBAL_LOCK, {"bundles": ["git"]})
+
+        out, _ = run("sync", str(self.project), "git")
+
+        self.assertIn("warning: git is installed globally, its skills will apply twice", out)
 
     def test_exclusive_bundles_are_refused(self):
         out, code = run("sync", str(self.project), "architecture", "architecture-light")
@@ -337,6 +344,15 @@ class SyncTest(ProjectCase):
         self.assertIn(f"Synced docs into {self.project}", out)
         self.assertTrue(skill.is_file())
 
+    def test_status_forgets_a_registered_project_without_a_lock(self):
+        run("sync", str(self.project), "docs")
+        (self.project / harness.LOCK_FILE).unlink()
+
+        out, _ = run("status")
+
+        self.assertIn(f"forget {self.project}", out)
+        self.assertEqual(harness.registered_projects(), [])
+
     def test_status_reports_missing_and_edited(self):
         run("sync", str(self.project), "docs")
         out, _ = run("status", str(self.project))
@@ -456,6 +472,17 @@ class CheckTest(unittest.TestCase):
         self.assertIn("rs-nonexistent", problems[0])
 
 
+    def test_skill_missing_from_the_readme_command_table_is_reported(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            readme = Path(tmp) / "README.md"
+            readme.write_text(harness.README_FILE.read_text(encoding="utf-8").replace("`/rs-spec`", "rs-spec"))
+            problems = []
+
+            with mock.patch.object(harness, "README_FILE", readme):
+                harness.check_marketplace(harness.bundle_names(), problems)
+
+        self.assertEqual(problems, [f"{readme}: /rs-spec is not in the command table"])
+
     def test_bundle_may_refer_to_skills_of_its_dependencies(self):
         self.assertIn("commit-message", harness.reachable("development"))
 
@@ -486,6 +513,43 @@ class CheckTest(unittest.TestCase):
         self.assertIn("bad manifest", problems[0])
 
 
+class VersionHistoryTest(ProjectCase):
+    def commit(self, version, rule):
+        bundle = self.project / "plugins" / "x"
+        (bundle / ".claude-plugin").mkdir(parents=True, exist_ok=True)
+        (bundle / ".claude-plugin" / "plugin.json").write_text(json.dumps({"name": "x", "version": version}))
+        (bundle / "rule.md").write_text(rule)
+        git(self.project, "add", "-A")
+        git(self.project, "-c", "user.name=t", "-c", "user.email=t@t", "-c", "core.hooksPath=/dev/null",
+            "commit", "-q", "-m", rule)
+        return subprocess.run(["git", "rev-parse", "HEAD"], cwd=self.project, capture_output=True, text=True).stdout.strip()
+
+    def setUp(self):
+        super().setUp()
+        git(self.project, "init", "-q")
+
+    def test_commits_that_bump_the_version_pass(self):
+        base = self.commit("1.0.0", "one")
+        self.commit("1.0.1", "two")
+
+        self.assertEqual(harness.unbumped_commits(base, self.project), [])
+
+    def test_commit_that_changes_a_bundle_without_a_bump_is_reported(self):
+        base = self.commit("1.0.0", "one")
+        self.commit("1.0.1", "two")
+        self.commit("1.0.1", "three")
+
+        problems = harness.unbumped_commits(base, self.project)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("plugins/x without bumping version 1.0.1", problems[0])
+
+    def test_unknown_base_is_no_commit(self):
+        self.commit("1.0.0", "one")
+
+        self.assertIsNone(harness.unbumped_commits("0" * 40, self.project))
+
+
 class ValidateHookTest(ProjectCase):
     def setUp(self):
         super().setUp()
@@ -510,6 +574,24 @@ class ValidateHookTest(ProjectCase):
 
         (self.project / "new.txt").write_text("x")
         self.assertIn("ran", self.validate(config).stdout)
+
+    def test_commit_leaving_out_changed_files_is_warned_about(self):
+        (self.project / "staged.txt").write_text("x")
+        (self.project / "left.txt").write_text("x")
+        git(self.project, "add", "staged.txt")
+
+        result = self.validate(json.dumps({"commit": [self.command(0)]}))
+
+        self.assertIn("leaves out 2 changed files: .agents/validation.json, left.txt", result.stderr)
+
+    def test_commit_of_every_change_is_not_warned_about(self):
+        (self.project / "staged.txt").write_text("x")
+        (self.project / ".agents/validation.json").write_text(json.dumps({"commit": [self.command(0)]}))
+        git(self.project, "add", "-A")
+
+        result = self.validate(json.dumps({"commit": [self.command(0)]}))
+
+        self.assertNotIn("leaves out", result.stderr)
 
     def test_failing_command_fails_the_stage(self):
         result = self.validate(json.dumps({"commit": [self.command(3)]}))
@@ -795,6 +877,9 @@ class GuardTest(unittest.TestCase):
 
     def test_setting_hooks_path_to_the_hooks_directory_is_allowed(self):
         self.assert_allowed(self.call("Bash", command="git config core.hooksPath .githooks"))
+
+    def test_reading_hooks_path_without_get_is_allowed(self):
+        self.assert_allowed(self.call("Bash", command="git config core.hooksPath; echo done"))
 
     def test_reading_hooks_path_is_allowed(self):
         self.assert_allowed(self.call("Bash", command="git config --get core.hooksPath"))

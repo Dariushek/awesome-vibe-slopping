@@ -1,6 +1,6 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "92c210f-dirty",
+  "commit": "0b5da3e-dirty",
   "bundles": [
     "git",
     "validation"
@@ -15,12 +15,12 @@
     ".githooks/commit-msg": "20bebea611579aa3612a55d6924747cbe8a9bb72e915fd7b1715ef05fb0307fb",
     ".githooks/pre-commit": "d5bdccba7b4ac09cdaf13cd6a9eb25b65b14f47dc23b8a23034cb1722f8cbf39",
     ".githooks/pre-push": "15aa8e09215c63e412fccf768854f2242a0a645577b087da231fa01f29d697b1",
-    ".githooks/validate": "8d9acf581cca51323cf89ca714b024c6dd8134f5995cf493c9031820d7c4f66a",
+    ".githooks/validate": "7a5012131cce51c488b86441619f7358847cb196dbe7e41cbb696feee8d3a1d9",
     ".agents/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
     ".claude/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
     ".devin/hooks/guard": "853462f78594f51bc6b94f2b1e2786606243d6f8ef6386dc957d428d46e59b8b",
-    ".devin/hooks/guard.py": "60b388e1c4a3a898942705971ffd3cec8c9af7162274643c4f3ab251857deb24",
+    ".devin/hooks/guard.py": "7a8ff664894568ec1ee3ec19ecabbd2d160e89896e8ccd7a842251928838bdd4",
     ".claude/hooks/guard": "853462f78594f51bc6b94f2b1e2786606243d6f8ef6386dc957d428d46e59b8b",
-    ".claude/hooks/guard.py": "60b388e1c4a3a898942705971ffd3cec8c9af7162274643c4f3ab251857deb24"
+    ".claude/hooks/guard.py": "7a8ff664894568ec1ee3ec19ecabbd2d160e89896e8ccd7a842251928838bdd4"
   }
 }

@@ -38,6 +38,7 @@ HOOKS_PATH = re.compile(r"core\.hookspath", re.IGNORECASE)
 HOOKS_PATH_ALLOWED = (
     re.compile(r"\bconfig\s+(--local\s+)?core\.hookspath\s+\.githooks/?\s*$", re.IGNORECASE),
     re.compile(r"\bconfig\s+(--local\s+)?--get\s+core\.hookspath\s*$", re.IGNORECASE),
+    re.compile(r"\bconfig\s+(--local\s+)?core\.hookspath\s*$", re.IGNORECASE),
 )
 CHANGES_FILES = re.compile(r"(^|\s)(rm|mv|cp|chmod|truncate|unlink|tee|sed|ln)\b")
 START = r"(^|[\s/\"'=>])"

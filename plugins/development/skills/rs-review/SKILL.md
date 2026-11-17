@@ -14,7 +14,7 @@ If the project has `.agents/overrides/rs-review.md`, read it first. Where it con
 3. **Record.** Write the findings as returned, each with outcome `open`, and commit them with the commit-message skill, before doing anything about them. A session that stops now loses nothing.
    - When the change has a spec, append a section per round to `REVIEW.md` next to `SPEC.md`. If `docs/changes/` has no record for the spec yet, add one with `Kind: spec` from the rs-change template.
    - When it has a change record in `docs/changes/`, fill its `## Review` section, one subsection per round.
-   - Otherwise keep them in chat only.
+   - Otherwise add a record from the rs-change template with `Kind: change` and fill its `## Review` section.
 4. **Verify.** Check each finding against the code. Drop false positives with the reason.
 5. **Triage.**
    - Fix automatically: a `certain` bug or security hole with a concrete failure case, a missing scenario test, a test that proves nothing, a rule or ADR breach with an obvious fix.

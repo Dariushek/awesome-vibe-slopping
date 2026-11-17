@@ -277,6 +277,13 @@ def has_rules(name):
     return any((bundle_dir(name) / "rules").glob("*.md"))
 
 
+def doubled_parts(name):
+    """What of a globally installed bundle a project sync would install a second time."""
+    root = bundle_dir(name)
+    parts = {"rules": has_rules(name), "skills": any(root.glob("skills/*/SKILL.md")), "agents": any(root.glob("agents/*.md"))}
+    return [part for part, present in parts.items() if present]
+
+
 def render_rules(bundles):
     parts = []
     for name in bundles:
@@ -661,6 +668,21 @@ def register(project, present):
         write_json(PROJECTS_FILE, {"projects": sorted(projects)})
 
 
+def synced_projects():
+    """Registered projects that still have a lock. The others are forgotten."""
+    projects = []
+    for name in registered_projects():
+        project = Path(name)
+        if (project / LOCK_FILE).is_file():
+            projects.append(project)
+            continue
+
+        print(f"forget {project}: no {LOCK_FILE}")
+        register(project, present=False)
+
+    return projects
+
+
 def sync_project(project, requested_bundles, requested_targets, policy):
     lock_path = project / LOCK_FILE
     lock = read_json(lock_path)
@@ -669,8 +691,9 @@ def sync_project(project, requested_bundles, requested_targets, policy):
 
     installed_globally = global_bundles()
     for name in requested:
-        if name in installed_globally and has_rules(name):
-            print(f"warning: {name} is installed globally, its rules will apply twice")
+        doubled = doubled_parts(name) if name in installed_globally else []
+        if doubled:
+            print(f"warning: {name} is installed globally, its {' and '.join(doubled)} will apply twice")
 
     bundles = with_dependencies(requested, installed_globally, Notice.PRINT)
     check_exclusive(bundles)
@@ -714,13 +737,7 @@ def cmd_sync(args):
     if args.project:
         sys.exit("--all takes no project or bundles")
 
-    for name in registered_projects():
-        project = Path(name)
-        if not (project / LOCK_FILE).is_file():
-            print(f"forget {project}: no {LOCK_FILE}")
-            register(project, present=False)
-            continue
-
+    for project in synced_projects():
         sync_project(project, None, args.targets, policy)
 
 
@@ -843,8 +860,8 @@ def cmd_status(args):
         return
 
     global_status()
-    for name in registered_projects():
-        project_status(Path(name))
+    for project in synced_projects():
+        project_status(project)
 
 
 def cmd_list(_args):
@@ -890,6 +907,36 @@ def check_version(name, problems):
 
     if manifest(name).get("version") == committed:
         problems.append(f"plugins/{name}: changed since the last commit, bump version {committed}")
+
+
+def git_output(root, *args):
+    result = subprocess.run(["git", "-C", str(root), *args], capture_output=True, text=True)
+    return result.stdout if result.returncode == 0 else None
+
+
+def version_at(root, commit, name):
+    text = git_output(root, "show", f"{commit}:plugins/{name}/{PLUGIN_MANIFEST.as_posix()}")
+    try:
+        return json.loads(text).get("version") if text else None
+    except ValueError:
+        return None
+
+
+def unbumped_commits(base, root=REPO):
+    """Commits after `base` that change a bundle and keep its version. None when `base` is no commit."""
+    if git_output(root, "rev-parse", "--verify", "--quiet", f"{base}^{{commit}}") is None:
+        return None
+
+    problems = []
+    for commit in git_output(root, "rev-list", "--no-merges", "--reverse", f"{base}..HEAD").split():
+        changed = git_output(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "--root", commit, "--", "plugins")
+        bundles = {parts[1] for parts in (path.split("/") for path in changed.splitlines()) if len(parts) > 2}
+        for name in sorted(bundles):
+            version = version_at(root, commit, name)
+            if version is not None and version == version_at(root, f"{commit}^", name):
+                problems.append(f"{commit[:7]}: changes plugins/{name} without bumping version {version}")
+
+    return problems
 
 
 def check_references(root, known, problems):
@@ -962,6 +1009,10 @@ def check_marketplace(names, problems):
         if f"`{name}`" not in readme:
             problems.append(f"{README_FILE}: {name} is not in the bundle table")
 
+        for skill in sorted(p.parent.name for p in (PLUGINS_DIR / name).glob("skills/*/SKILL.md")):
+            if f"`/{skill}`" not in readme:
+                problems.append(f"{README_FILE}: /{skill} is not in the command table")
+
     for name in listed.keys() - set(names):
         problems.append(f"{MARKETPLACE_FILE}: {name} has no plugin directory")
 
@@ -978,7 +1029,7 @@ def check_plugins(problems):
         problems.append(f"{PLUGIN_VALIDATOR} plugin validate failed:\n{result.stdout}{result.stderr}".rstrip())
 
 
-def cmd_check(_args):
+def cmd_check(args):
     problems = []
     names = bundle_names()
     skills = {p.parent.name for p in PLUGINS_DIR.glob("*/skills/*/SKILL.md")}
@@ -987,6 +1038,12 @@ def cmd_check(_args):
 
     check_marketplace(names, problems)
     check_plugins(problems)
+    if args.since:
+        unbumped = unbumped_commits(args.since)
+        if unbumped is None:
+            print(f"skip version history: {args.since} is no commit")
+
+        problems += unbumped or []
 
     for problem in problems:
         print(problem)
@@ -1007,7 +1064,9 @@ def main(argv=None):
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("list", help="list bundles").set_defaults(func=cmd_list)
-    sub.add_parser("check", help="validate this repo").set_defaults(func=cmd_check)
+    check = sub.add_parser("check", help="validate this repo")
+    check.add_argument("--since", help="also require a version bump in every commit after this one")
+    check.set_defaults(func=cmd_check)
 
     sync = sub.add_parser("sync", help="render bundles into a project")
     sync.add_argument("project", nargs="?")

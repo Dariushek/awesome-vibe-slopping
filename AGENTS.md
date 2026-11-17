@@ -8,8 +8,8 @@ This repo is the harness source of truth. Layout and usage: README.md.
 - Agents: `agents/<name>.md` with `name` equal to the file stem and a `description`.
 - Nothing project-specific here. Project facts stay in the project's own AGENTS.md, outside the generated block.
 - Bump the bundle `version` on every change.
-- `bin/harness check` fails when a changed bundle has no version bump, a skill it refers to is outside the bundle and its dependencies, descriptions drift or `claude plugin validate` fails.
-- Change `bin/harness` with a test in `tests/`.
+- `bin/harness check` fails when a changed bundle has no version bump, also per commit with `--since <rev>`, a skill it refers to is outside the bundle and its dependencies, descriptions drift or `claude plugin validate` fails.
+- Change `bin/harness` or a bundle script with a test in `tests/`.
 - `bin/harness` is Python standard library only.
 
 <!-- harness:begin generated from awesome-vibe-slopping, edit there -->

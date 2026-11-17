@@ -19,3 +19,7 @@ jobs:
           python-version: "3.x"
       - run: npm install -g @anthropic-ai/claude-code
       - run: python .githooks/validate all
+      - if: runner.os == 'Linux'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python bin/harness check --since "$BASE"

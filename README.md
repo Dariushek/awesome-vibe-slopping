@@ -91,7 +91,7 @@ bin/harness status                             # global and every project: outda
 bin/harness remove ~/Projects/Wealfi           # take the harness out again
 ```
 
-Projects are remembered in `~/.config/awesome-vibe-slopping/projects.json` from their first sync on.
+Projects are remembered in `~/.config/awesome-vibe-slopping/projects.json` from their first sync on. `status` and `sync --all` forget a project that has no `.harness.json` anymore.
 
 ## Project overrides
 
@@ -108,7 +108,7 @@ The `validation` bundle syncs `.githooks/` and sets `core.hooksPath` to it, unle
 }
 ```
 
-`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. A stage that already passed on the same working tree is skipped, so a gate run right before the commit is not repeated by the hook.
+`pre-commit` runs `commit`, `pre-push` runs `push`, `.githooks/validate all` runs both. The first failure stops the commit or push. A stage that already passed on the same working tree is skipped, so a gate run right before the commit is not repeated by the hook. The commands check the whole working tree, so `commit` warns when the commit leaves out changed files.
 
 A command can take only the changed files:
 
@@ -178,5 +178,5 @@ A plugin delivers skills, agents, commands and hooks, never rules. Bundles with 
 
 1. Edit under `plugins/`. New bundle: add its directory and an entry in `marketplace.json`.
 2. Bump `version` in the bundle's `plugin.json`.
-3. `.githooks/validate all`, which runs `bin/harness check` and the tests. The commit hook runs it too. The check also runs `claude plugin validate` when Claude Code is installed; CI always does.
+3. `.githooks/validate all`, which runs `bin/harness check` and the tests. The commit hook runs it too. The check also runs `claude plugin validate` when Claude Code is installed; CI always does. CI also runs `bin/harness check --since <base>`, which requires a version bump in every commit that changes a bundle.
 4. Commit, push, `bin/harness sync --all`.

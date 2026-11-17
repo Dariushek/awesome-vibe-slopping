@@ -21,6 +21,7 @@ CMD_VARIABLE = re.compile(r"%[^%]+%")
 PYTHON = "{python}"
 PUSH_BASES = ("@{upstream}", "origin/HEAD")
 MAX_ARGUMENTS_LENGTH = 6000 if os.name == "nt" else 100000
+LISTED_FILES = 5
 
 
 def git(root, *args, env=None):
@@ -105,6 +106,29 @@ def changed_files(root, name):
         tracked = file_list(root, "ls-files", "--cached") or []
 
     return sorted(set(tracked) | set(untracked))
+
+
+def left_out(root):
+    """Changed files a commit leaves out while it takes others. None staged means no commit is being made."""
+    if not file_list(root, "diff", "--cached", "--name-only"):
+        return []
+
+    unstaged = file_list(root, "diff", "--name-only") or []
+    untracked = file_list(root, "ls-files", "--others", "--exclude-standard") or []
+    return sorted(set(unstaged) | set(untracked))
+
+
+def warn_left_out(root):
+    files = left_out(root)
+    if not files:
+        return
+
+    shown = ", ".join(files[:LISTED_FILES]) + (", ..." if len(files) > LISTED_FILES else "")
+    print(
+        f"validate commit: warning: checks run on the working tree, but the commit leaves out "
+        f"{len(files)} changed files: {shown}",
+        file=sys.stderr, flush=True,
+    )
 
 
 def matching(files, patterns):
@@ -219,6 +243,9 @@ def main():
         commands = config.get(name, [])
         if not commands:
             continue
+
+        if name == "commit":
+            warn_left_out(root)
 
         passed = run_stage(root, name, commands, stamps)
         if stamp_file and stamps.get(name):
