@@ -1,0 +1,13 @@
+{
+  "PostToolUse": [
+    {
+      "matcher": "^(write|edit|apply_patch|notebook_edit)$",
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh \"{hooks_dir}/after-edit\""
+        }
+      ]
+    }
+  ]
+}

@@ -68,6 +68,11 @@
       "description": "Validation gate: project config with build, analysis and test commands, enforced by git hooks."
     },
     {
+      "name": "after-edit",
+      "source": "./plugins/after-edit",
+      "description": "Run the project's per-file commands, such as a formatter, after every agent edit."
+    },
+    {
       "name": "docs",
       "source": "./plugins/docs",
       "description": "Project documentation: README with what the project is, what to install and how to run it."

@@ -35,6 +35,7 @@ bin/harness                       sync and validation
 | `architecture-light` | Short rules in AGENTS.md, no ADRs. Instead of `architecture` |
 | `development`   | Bug fix, small change, spec, UI, plan, tasks, review  |
 | `validation`    | Build, analysis and test gate enforced by git hooks   |
+| `after-edit`    | Per-file commands, such as a formatter, after every agent edit |
 | `docs`          | `rs-readme`: what to install, how to run and test     |
 | `testing`       | Integration tests first, fakes, one e2e per feature. `rs-test-setup` |
 
@@ -135,6 +136,7 @@ A command can take only the changed files:
 | `--no-verify`, changes to `core.hooksPath`, `.githooks/` or `.claude/hooks/`, taking the guard out of the agent settings | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
 | Subagents kept to their role: the code reviewer to read-only git, the verifier and the gate runner to no git changes, the task implementer to no push | An agent hook, from the `development` bundle | By agents without tool hooks |
 | Removing or changing a command in `.agents/validation.json` | The agent hook from the `validation` bundle, which asks the user | By a human, and by agents without tool hooks |
+| Any change to the commands in `.agents/after-edit.json` | The agent hook from the `validation` bundle, which asks the user | By a human, and by agents without tool hooks |
 | All of the above | CI running `.githooks/validate all` | No |
 
 Devin Desktop and Devin CLI share one engine and get the guard through the `devin` target. Devin cannot ask the user from a hook, so a change that needs approval is refused there with a request to ask. Hooks do not run while a workspace is in Restricted Mode. The Hooks tab of the Customize page in Devin Desktop, or `/hooks` in the CLI, shows whether the guard is loaded. The subagent rules need the caller's name, which only Claude Code passes.
@@ -156,6 +158,16 @@ steps:
 Git hooks reach a project even when their bundle is installed globally, since a global install cannot deliver them.
 
 An optional `run` entry, `{"start": "...", "url": "..."}`, tells agents how to start the app for checks. Without the file, hooks warn and pass. A fresh clone needs one sync, or `git config core.hooksPath .githooks`.
+
+## After edit
+
+The `after-edit` bundle runs commands on every file an agent writes, such as a formatter. The project lists them in `.agents/after-edit.json`, with the same `{changed}` and `{python}` placeholders as the validation gate. `{changed}` is the edited file:
+
+```json
+["dotnet format whitespace --folder --include {changed:*.cs}"]
+```
+
+A command whose pattern does not match the file is skipped. A failing one never blocks the edit; its output goes back to the agent. Keep them fast, since the agent waits after every edit. The full check stays in `commit`. The hook runs these commands without asking, so the `validation` guard asks the user before an agent changes the file. Claude Code and Devin both run it, Devin through the `devin` target.
 
 ## Global
 
