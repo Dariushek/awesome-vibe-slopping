@@ -12,8 +12,10 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - run: python bin/harness check
-      - run: python -m unittest discover -s tests
+      - run: npm install -g @anthropic-ai/claude-code
+      - run: python .githooks/validate all

@@ -20,7 +20,7 @@ The prototype shows how the spec's workflows look, so flow mistakes surface befo
    - Every screen names its scenario IDs in a corner label.
 4. **Check.** Open every screen and state with the playwright skill at phone and desktop widths. Fix overflow, broken links and anything that contradicts the design system.
 5. **Review.** Show the user the screenshots and how to open the prototype. Iterate until they accept it.
-6. **Link.** Set the spec's `Prototype:` line to the prototype path. Record visual decisions that apply beyond this feature, such as a new shared component, with rs-architecture-decision.
+6. **Link.** Set the spec's `Prototype:` line to the prototype path. Record visual decisions that apply beyond this feature, such as a new shared component, with rs-architecture-decision. In a project without ADRs, add them to the `## Architecture` rules outside the generated block of AGENTS.md instead, with the user's OK.
 7. Next step: rs-plan.
 
 ## Rules

@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from enum import Enum
@@ -63,8 +64,13 @@ DEVIN_TOOLS = {
 }
 DEVIN_SKILL_TOOL = "skill"
 DEVIN_PRELOAD = "Before anything else load these skills: {skills}."
+# Model names differ between agents. Without one, Devin uses its default subagent model.
+DEVIN_DROPPED = ("model",)
 OVERRIDE_PATH = ".agents/overrides/{name}.md"
 EXCLUSIVE_BUNDLES = [{"architecture", "architecture-light"}]
+# A project has at most one of these, so a bundle may refer to their skills only with a fallback.
+OPTIONAL_BUNDLES = set().union(*EXCLUSIVE_BUNDLES)
+PLUGIN_VALIDATOR = "claude"
 FRONTMATTER_FENCE = "---"
 SKILL_REFERENCE = re.compile(r"\brs-[a-z0-9]+(?:-[a-z0-9]+)*\b")
 DIRTY_SUFFIX = "-dirty"
@@ -224,6 +230,9 @@ def devin_agent(text):
     skills = listed(fields.pop("skills", ""))
     lines = [FRONTMATTER_FENCE]
     for key, value in fields.items():
+        if key in DEVIN_DROPPED:
+            continue
+
         if key != "tools":
             lines.append(f"{key}: {value}")
             continue
@@ -889,6 +898,19 @@ def check_references(root, known, problems):
             problems.append(f"{path}: {reference} is no skill or agent")
 
 
+def provided(name):
+    """Skills and agents a bundle brings."""
+    root = PLUGINS_DIR / name
+    skills = {p.parent.name for p in root.glob("skills/*/SKILL.md")}
+    return skills | {p.stem for p in root.glob("agents/*.md")}
+
+
+def reachable(name):
+    """Skills and agents a bundle may refer to: its own, its dependencies' and optional ones."""
+    names = with_dependencies([name], (), Notice.QUIET) + sorted(OPTIONAL_BUNDLES)
+    return set().union(*(provided(bundle) for bundle in names))
+
+
 def check_agent_tools(agent, problems):
     try:
         devin_agent(read_text(agent))
@@ -896,7 +918,7 @@ def check_agent_tools(agent, problems):
         problems.append(f"{agent}: {refused}")
 
 
-def check_bundle(name, names, skills, agents, problems):
+def check_bundle(name, names, skills, problems):
     root = PLUGINS_DIR / name
     dependencies = manifest(name).get("dependencies", [])
     if manifest(name).get("name") != name:
@@ -923,7 +945,7 @@ def check_bundle(name, names, skills, agents, problems):
         if not read_text(rule).startswith("## "):
             problems.append(f"{rule}: must start with a ## heading")
 
-    check_references(root, skills | agents, problems)
+    check_references(root, reachable(name), problems)
     check_version(name, problems)
 
 
@@ -944,15 +966,27 @@ def check_marketplace(names, problems):
         problems.append(f"{MARKETPLACE_FILE}: {name} has no plugin directory")
 
 
+def check_plugins(problems):
+    """Claude Code's own validation of the plugin manifests, when it is installed."""
+    validator = shutil.which(PLUGIN_VALIDATOR)
+    if not validator:
+        print(f"skip plugin validation: {PLUGIN_VALIDATOR} not found")
+        return
+
+    result = subprocess.run([validator, "plugin", "validate", str(REPO)], capture_output=True, text=True)
+    if result.returncode != 0:
+        problems.append(f"{PLUGIN_VALIDATOR} plugin validate failed:\n{result.stdout}{result.stderr}".rstrip())
+
+
 def cmd_check(_args):
     problems = []
     names = bundle_names()
     skills = {p.parent.name for p in PLUGINS_DIR.glob("*/skills/*/SKILL.md")}
-    agents = {p.stem for p in PLUGINS_DIR.glob("*/agents/*.md")}
     for name in names:
-        check_bundle(name, names, skills, agents, problems)
+        check_bundle(name, names, skills, problems)
 
     check_marketplace(names, problems)
+    check_plugins(problems)
 
     for problem in problems:
         print(problem)

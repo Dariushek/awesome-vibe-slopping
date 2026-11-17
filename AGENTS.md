@@ -8,7 +8,7 @@ This repo is the harness source of truth. Layout and usage: README.md.
 - Agents: `agents/<name>.md` with `name` equal to the file stem and a `description`.
 - Nothing project-specific here. Project facts stay in the project's own AGENTS.md, outside the generated block.
 - Bump the bundle `version` on every change.
-- `bin/harness check` fails when a changed bundle has no version bump, a referenced skill does not exist or descriptions drift.
+- `bin/harness check` fails when a changed bundle has no version bump, a skill it refers to is outside the bundle and its dependencies, descriptions drift or `claude plugin validate` fails.
 - Change `bin/harness` with a test in `tests/`.
 - `bin/harness` is Python standard library only.
 
@@ -21,5 +21,6 @@ This repo is the harness source of truth. Layout and usage: README.md.
 - `.githooks/validate commit` must pass before reporting work as done, `.githooks/validate all` before a push or pull request. Never report done while a command fails.
 - A stage that passed on the same working tree is skipped, so run it freely.
 - The project's CI runs `.githooks/validate all` on every push and pull request. When it is missing, say so and offer to add it.
-- A command can take only the changed files: `{changed}` or `{changed:*.cs,*.ts}` in it is replaced with them, and the command is skipped when there are none. `{python}` is the interpreter running the hook. Use it for formatters and per-file linters, never for builds, tests or analysis that spans files.
+- A command can take only the changed files: `{changed}` or `{changed:*.cs,*.ts}` in it is replaced with them, and the command is skipped when there are none. Use it for formatters and per-file linters, never for builds, tests or analysis that spans files.
+- `{python}` in a command is the interpreter running the hook. Use it to run Python scripts, so they run the same on every system.
 <!-- harness:end -->

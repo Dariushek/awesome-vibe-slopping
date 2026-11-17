@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 from importlib.machinery import SourceFileLoader
 from importlib.util import module_from_spec, spec_from_loader
 from pathlib import Path
@@ -394,13 +395,13 @@ class GlobalTest(ProjectCase):
 class DevinAgentTest(unittest.TestCase):
     SOURCE = "---\nname: helper\ndescription: Helps: a lot.\ntools: Read, Bash, Edit\nmodel: haiku\n---\n\nDo the work.\n"
 
-    def test_tools_become_devins_and_the_rest_is_kept(self):
+    def test_tools_become_devins_and_the_model_is_left_to_devin(self):
         built = harness.devin_agent(self.SOURCE)
 
         self.assertEqual(built, (
             "---\nname: helper\ndescription: Helps: a lot.\n"
             "allowed-tools:\n  - read\n  - exec\n  - get_output\n  - kill_shell\n  - edit\n  - apply_patch\n"
-            "model: haiku\n---\n\nDo the work.\n"
+            "---\n\nDo the work.\n"
         ))
 
     def test_preloaded_skills_become_an_instruction_and_the_skill_tool(self):
@@ -438,9 +439,8 @@ class CheckTest(unittest.TestCase):
         problems = []
         names = harness.bundle_names()
         skills = {p.parent.name for p in harness.PLUGINS_DIR.glob("*/skills/*/SKILL.md")}
-        agents = {p.stem for p in harness.PLUGINS_DIR.glob("*/agents/*.md")}
         for name in names:
-            harness.check_bundle(name, names, skills, agents, problems)
+            harness.check_bundle(name, names, skills, problems)
         harness.check_marketplace(names, problems)
 
         self.assertEqual([p for p in problems if "bump version" not in p], [])
@@ -454,6 +454,36 @@ class CheckTest(unittest.TestCase):
 
         self.assertEqual(len(problems), 1)
         self.assertIn("rs-nonexistent", problems[0])
+
+
+    def test_bundle_may_refer_to_skills_of_its_dependencies(self):
+        self.assertIn("commit-message", harness.reachable("development"))
+
+    def test_bundle_may_refer_to_skills_of_optional_bundles(self):
+        self.assertIn("rs-architecture-decision", harness.reachable("development"))
+
+    def test_bundle_may_not_refer_to_skills_of_bundles_it_does_not_depend_on(self):
+        self.assertNotIn("rs-spec", harness.reachable("docs"))
+
+    def test_plugin_validation_is_skipped_without_the_validator(self):
+        problems = []
+        with mock.patch.object(harness.shutil, "which", return_value=None):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                harness.check_plugins(problems)
+
+        self.assertEqual(problems, [])
+        self.assertIn("skip plugin validation", out.getvalue())
+
+    def test_failing_plugin_validation_is_reported(self):
+        problems = []
+        failed = subprocess.CompletedProcess([], 1, stdout="bad manifest\n", stderr="")
+        with mock.patch.object(harness.shutil, "which", return_value="claude"), \
+                mock.patch.object(harness.subprocess, "run", return_value=failed):
+            harness.check_plugins(problems)
+
+        self.assertEqual(len(problems), 1)
+        self.assertIn("bad manifest", problems[0])
 
 
 class ValidateHookTest(ProjectCase):

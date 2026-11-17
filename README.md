@@ -131,12 +131,12 @@ A command can take only the changed files:
 | Spec and plan structure | `.githooks/check-specs`, from the `development` bundle, as a `commit` command | With `--no-verify` |
 | `--no-verify`, changes to `core.hooksPath`, `.githooks/` or `.claude/hooks/`, taking the guard out of the agent settings | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
 | Subagents kept to their role: the code reviewer to read-only git, the verifier and the gate runner to no git changes, the task implementer to no push | An agent hook, from the `development` bundle | By agents without tool hooks |
-| Removing or changing a command in `.agents/validation.json` | The same agent hook, which asks the user | By a human, and by agents without tool hooks |
+| Removing or changing a command in `.agents/validation.json` | The agent hook from the `validation` bundle, which asks the user | By a human, and by agents without tool hooks |
 | All of the above | CI running `.githooks/validate all` | No |
 
 Devin Desktop and Devin CLI share one engine and get the guard through the `devin` target. Devin cannot ask the user from a hook, so a change that needs approval is refused there with a request to ask. Hooks do not run while a workspace is in Restricted Mode. The Hooks tab of the Customize page in Devin Desktop, or `/hooks` in the CLI, shows whether the guard is loaded. The subagent rules need the caller's name, which only Claude Code passes.
 
-Devin gets the agents as translated copies, never written by hand: tool names become Devin's, such as `Bash` to `exec`, and `skills` becomes an instruction to load them, since Devin has no such field. `bin/harness check` fails on a tool with no Devin counterpart. Custom subagents are experimental in Devin.
+Devin gets the agents as translated copies, never written by hand: tool names become Devin's, such as `Bash` to `exec`, and `skills` becomes an instruction to load them, since Devin has no such field. `model` is left out, so Devin uses its default subagent model. `bin/harness check` fails on a tool with no Devin counterpart. Custom subagents are experimental in Devin.
 
 Nothing local is a wall: whoever owns the machine can skip a git hook. The agent hook closes that door for the agent, CI closes it for everyone. A project without CI has defaults, not guarantees.
 
@@ -178,5 +178,5 @@ A plugin delivers skills, agents, commands and hooks, never rules. Bundles with 
 
 1. Edit under `plugins/`. New bundle: add its directory and an entry in `marketplace.json`.
 2. Bump `version` in the bundle's `plugin.json`.
-3. `.githooks/validate all`, which runs `bin/harness check`, the tests and `claude plugin validate .`. The commit hook runs it too.
+3. `.githooks/validate all`, which runs `bin/harness check` and the tests. The commit hook runs it too. The check also runs `claude plugin validate` when Claude Code is installed; CI always does.
 4. Commit, push, `bin/harness sync --all`.
