@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+"""Keep the files outside projects visible in the solution, like Visual Studio solution items.
+
+Usage: solution-items [--fix] [solution ...]
+
+Without solutions, every .sln and .slnx in the current directory is checked.
+Docs, pipeline definitions, README and build configuration outside any
+project belong in solution folders that mirror their directories. Files in
+the solution root go to "Solution Items". Prints one line per problem and
+exits 1 on any. --fix adds missing files and removes entries for files that
+no longer exist.
+
+Patterns in .agents/solution-items.json, {"include": [...], "exclude": [...]},
+extend the defaults. `*` stays within a directory, `**` spans directories.
+"""
+
+import json
+import os
+import re
+import subprocess
+import sys
+import uuid
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+CONFIG = Path(".agents") / "solution-items.json"
+ROOT_FOLDER = "Solution Items"
+FOLDER_TYPE = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}"
+PROJECT_EXTENSIONS = (".csproj", ".fsproj", ".vbproj", ".sqlproj", ".dcproj", ".esproj", ".shproj", ".njsproj")
+INCLUDE = [
+    "*.md", "*.yml", "*.yaml", "global.json", "nuget.config",
+    "**/.editorconfig", "**/Directory.Build.props", "**/Directory.Build.targets", "**/Directory.Packages.props",
+    "docs/**", "doc/**",
+    ".github/workflows/**", ".github/*.yml", ".github/*.yaml", ".gitlab-ci.yml",
+    ".azuredevops/**", ".azure-pipelines/**", ".pipelines/**", "pipelines/**",
+]
+EXCLUDE = ["**/bin/**", "**/obj/**", "**/node_modules/**"]
+SKIPPED_DIRS = {".git", "bin", "obj", "node_modules"}
+
+SLN_FOLDER = re.compile(r'^Project\("' + re.escape(FOLDER_TYPE) + r'"\)\s*=\s*"([^"]*)",\s*"[^"]*",\s*"(\{[^}]+\})"', re.I)
+SLN_NESTING = re.compile(r"^\s*(\{[^}]+\})\s*=\s*(\{[^}]+\})\s*$")
+SLN_ITEM = re.compile(r"^\s*(.+?)\s*=\s*(.+?)\s*$")
+
+
+def glob(pattern):
+    """Regex for a path pattern: `*` and `?` stay within a directory, `**` spans any."""
+    parts = pattern.split("/")
+    regex = ""
+    for index, part in enumerate(parts):
+        last = index == len(parts) - 1
+        if part == "**":
+            regex += ".*" if last else "(?:[^/]+/)*"
+            continue
+
+        regex += "".join("[^/]*" if c == "*" else "[^/]" if c == "?" else re.escape(c) for c in part)
+        regex += "" if last else "/"
+
+    return re.compile(regex, re.I)
+
+
+def patterns():
+    include, exclude = list(INCLUDE), list(EXCLUDE)
+    if CONFIG.is_file():
+        try:
+            config = json.loads(CONFIG.read_text(encoding="utf-8"))
+        except ValueError as error:
+            sys.exit(f"{CONFIG}: {error}")
+
+        include += config.get("include", [])
+        exclude += config.get("exclude", [])
+
+    return [glob(p) for p in include], [glob(p) for p in exclude]
+
+
+def files(root):
+    """Every file under root as a posix path relative to it, without ignored ones."""
+    result = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],
+        cwd=root, capture_output=True, text=True, encoding="utf-8",
+    )
+    if result.returncode == 0:
+        return sorted({p for p in result.stdout.split("\0") if p and (root / p).is_file()})
+
+    found = []
+    for directory, dirs, names in os.walk(root):
+        dirs[:] = [d for d in dirs if d not in SKIPPED_DIRS]
+        found += [(Path(directory) / n).relative_to(root).as_posix() for n in names]
+
+    return sorted(found)
+
+
+def expected(root):
+    """Files the solution should show, those outside any project directory."""
+    include, exclude = patterns()
+    paths = files(root)
+    projects = {p.rsplit("/", 1)[0] + "/" for p in paths if p.lower().endswith(PROJECT_EXTENSIONS) and "/" in p}
+    if any(p.lower().endswith(PROJECT_EXTENSIONS) and "/" not in p for p in paths):
+        return []
+
+    return [
+        p for p in paths
+        if not any(p.startswith(d) for d in projects)
+        and any(r.fullmatch(p) for r in include)
+        and not any(r.fullmatch(p) for r in exclude)
+    ]
+
+
+def folder_of(path):
+    """Solution folder chain for a file: its directories, or the root folder."""
+    parts = path.split("/")[:-1]
+    return parts or [ROOT_FOLDER]
+
+
+class Text:
+    """Solution file text that keeps its byte order mark and line endings."""
+
+    def __init__(self, path):
+        raw = path.read_bytes()
+        self.path = path
+        self.bom = raw.startswith(b"\xef\xbb\xbf")
+        text = raw.decode("utf-8-sig")
+        self.newline = "\r\n" if "\r\n" in text else "\n"
+        self.text = text.replace("\r\n", "\n")
+
+    def write(self, text):
+        data = text.replace("\n", self.newline).encode("utf-8")
+        self.path.write_bytes((b"\xef\xbb\xbf" if self.bom else b"") + data)
+
+
+class Sln:
+    """Solution folders and their items in a classic .sln file."""
+
+    def __init__(self, path):
+        self.file = Text(path)
+        self.lines = self.file.text.split("\n")
+
+    def folders(self):
+        """Folder GUID to (name, parent GUID)."""
+        names = {}
+        for line in self.lines:
+            match = SLN_FOLDER.match(line)
+            if match:
+                names[match.group(2).upper()] = match.group(1)
+
+        parents = {}
+        for child, parent in self.nesting():
+            parents[child.upper()] = parent.upper()
+
+        return {guid: (name, parents.get(guid)) for guid, name in names.items()}
+
+    def nesting(self):
+        start = self.section_start("GlobalSection(NestedProjects)")
+        if start is None:
+            return []
+
+        found = []
+        for line in self.lines[start + 1:]:
+            if line.strip().startswith("EndGlobalSection"):
+                break
+            match = SLN_NESTING.match(line)
+            if match:
+                found.append(match.groups())
+
+        return found
+
+    def section_start(self, prefix):
+        for index, line in enumerate(self.lines):
+            if line.strip().startswith(prefix):
+                return index
+
+        return None
+
+    def paths(self):
+        """Folder GUID to its path of names."""
+        folders = self.folders()
+
+        def chain(guid, seen=()):
+            name, parent = folders[guid]
+            if parent in folders and parent not in seen:
+                return chain(parent, seen + (guid,)) + [name]
+            return [name]
+
+        return {guid: chain(guid) for guid in folders}
+
+    def block(self, guid):
+        """Line range of a folder's Project block."""
+        for index, line in enumerate(self.lines):
+            match = SLN_FOLDER.match(line)
+            if match and match.group(2).upper() == guid:
+                end = index
+                while self.lines[end].strip() != "EndProject":
+                    end += 1
+                return index, end
+
+        raise KeyError(guid)
+
+    def items(self):
+        """Folder GUID to the item paths in it, posix style."""
+        result = {}
+        for guid in self.folders():
+            start, end = self.block(guid)
+            inside = False
+            for line in self.lines[start + 1:end]:
+                stripped = line.strip()
+                if stripped.startswith("ProjectSection(SolutionItems)"):
+                    inside = True
+                elif stripped.startswith("EndProjectSection"):
+                    inside = False
+                elif inside and SLN_ITEM.match(line):
+                    result.setdefault(guid, []).append(SLN_ITEM.match(line).group(1).replace("\\", "/"))
+
+        return result
+
+    def entries(self):
+        return [path for paths in self.items().values() for path in paths]
+
+    def add_folder(self, name, parent):
+        guid = "{" + str(uuid.uuid4()).upper() + "}"
+        at = self.section_start("Global")
+        at = len(self.lines) if at is None else at
+        self.lines[at:at] = [f'Project("{FOLDER_TYPE}") = "{name}", "{name}", "{guid}"', "EndProject"]
+        if parent:
+            start = self.section_start("GlobalSection(NestedProjects)")
+            if start is None:
+                end = max(i for i, line in enumerate(self.lines) if line.strip() == "EndGlobal")
+                self.lines[end:end] = ["\tGlobalSection(NestedProjects) = preSolution", "\tEndGlobalSection"]
+                start = end
+
+            self.lines.insert(start + 1, f"\t\t{guid} = {parent}")
+
+        return guid
+
+    def set_items(self, guid, paths):
+        start, end = self.block(guid)
+        kept, inside = [], False
+        for line in self.lines[start + 1:end]:
+            stripped = line.strip()
+            if stripped.startswith("ProjectSection(SolutionItems)"):
+                inside = True
+            elif inside:
+                inside = not stripped.startswith("EndProjectSection")
+            else:
+                kept.append(line)
+
+        section = []
+        if paths:
+            section = ["\tProjectSection(SolutionItems) = preProject"]
+            section += [f"\t\t{p.replace('/', chr(92))} = {p.replace('/', chr(92))}" for p in sorted(paths, key=str.lower)]
+            section += ["\tEndProjectSection"]
+
+        self.lines[start + 1:end] = section + kept
+
+    def remove_folder(self, guid):
+        start, end = self.block(guid)
+        del self.lines[start:end + 1]
+        self.lines = [line for line in self.lines if not (SLN_NESTING.match(line) and guid in line.upper())]
+
+    def sync(self, missing, stale):
+        items = self.items()
+        paths = {tuple(p): guid for guid, p in self.paths().items()}
+        touched = set()
+        for guid, entries in items.items():
+            kept = [e for e in entries if e.lower() not in stale]
+            if kept != entries:
+                items[guid] = kept
+                touched.add(guid)
+
+        for path in missing:
+            chain, parent = folder_of(path), None
+            for depth in range(1, len(chain) + 1):
+                key = tuple(chain[:depth])
+                if key not in paths:
+                    paths[key] = self.add_folder(chain[depth - 1], parent)
+                parent = paths[key]
+
+            items.setdefault(parent, []).append(path)
+            touched.add(parent)
+
+        for guid in touched:
+            self.set_items(guid, items.get(guid, []))
+
+        self.prune(touched)
+        self.file.write("\n".join(self.lines))
+
+    def prune(self, touched):
+        """Remove touched folders left empty, then their emptied parents."""
+        pending = set(touched)
+        while pending:
+            guid = pending.pop()
+            folders = self.folders()
+            if guid not in folders or self.items().get(guid):
+                continue
+            if any(parent.upper() == guid for _, parent in self.nesting()):
+                continue
+
+            parent = folders[guid][1]
+            self.remove_folder(guid)
+            if parent:
+                pending.add(parent)
+
+
+class Slnx:
+    """Solution folders and their items in an XML .slnx file."""
+
+    def __init__(self, path):
+        self.file = Text(path)
+        parser = ET.XMLParser(target=ET.TreeBuilder(insert_comments=True))
+        self.root = ET.fromstring(self.file.text, parser=parser)
+
+    def folders(self):
+        return {f.get("Name"): f for f in self.root.iter("Folder")}
+
+    def entries(self):
+        return [item.get("Path") for item in self.root.iter("File")]
+
+    def folder(self, chain):
+        name = "/" + "/".join(chain) + "/"
+        existing = self.folders()
+        if name in existing:
+            return existing[name]
+
+        if len(chain) > 1:
+            self.folder(chain[:-1])
+
+        element = ET.Element("Folder", {"Name": name})
+        children = list(self.root)
+        folders = [i for i, child in enumerate(children) if child.tag == "Folder"]
+        at = next((i for i in folders if children[i].get("Name") > name), folders[-1] + 1 if folders else 0)
+        self.root.insert(at, element)
+        return element
+
+    def sync(self, missing, stale):
+        emptied = []
+        for folder in list(self.root.iter("Folder")):
+            for item in [f for f in folder.findall("File") if f.get("Path", "").replace("\\", "/").lower() in stale]:
+                folder.remove(item)
+                emptied.append(folder)
+
+        for path in missing:
+            folder = self.folder(folder_of(path))
+            items = folder.findall("File")
+            at = next((list(folder).index(i) for i in items if i.get("Path").lower() > path.lower()), len(items))
+            folder.insert(at, ET.Element("File", {"Path": path}))
+
+        self.prune(emptied)
+        ET.indent(self.root, "  ")
+        self.file.write(ET.tostring(self.root, encoding="unicode") + "\n")
+
+    def prune(self, emptied):
+        while emptied:
+            folder = emptied.pop()
+            name = folder.get("Name")
+            if folder not in list(self.root) or len(folder):
+                continue
+            if any(n != name and n.startswith(name) for n in self.folders()):
+                continue
+
+            self.root.remove(folder)
+            parent = name.rstrip("/").rsplit("/", 1)[0] + "/"
+            if parent in self.folders():
+                emptied.append(self.folders()[parent])
+
+
+def check(path, fix):
+    root = path.parent
+    solution = Slnx(path) if path.suffix.lower() == ".slnx" else Sln(path)
+    entries = [e.replace("\\", "/") for e in solution.entries()]
+    present = {e.lower() for e in entries}
+    missing = [p for p in expected(root) if p.lower() not in present]
+    stale = {e.lower() for e in entries if not (root / e).is_file()}
+    if not missing and not stale:
+        return 0
+
+    verb = ("Added", "Removed") if fix else ("Missing", "Not found")
+    for item in missing:
+        print(f"{path.name}: {verb[0]} {item}")
+    for item in sorted(e for e in entries if e.lower() in stale):
+        print(f"{path.name}: {verb[1]} {item}")
+
+    if fix:
+        solution.sync(missing, stale)
+        return 0
+
+    return 1
+
+
+def main(argv):
+    fix = "--fix" in argv
+    paths = [Path(a) for a in argv if a != "--fix"]
+    paths = paths or sorted(p for p in Path(".").iterdir() if p.suffix.lower() in (".sln", ".slnx"))
+    failed = sum(check(p, fix) for p in paths)
+    if failed:
+        print("Run solution-items --fix to update the solution.")
+
+    return 1 if failed else 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

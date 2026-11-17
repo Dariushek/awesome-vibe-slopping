@@ -23,6 +23,7 @@ GUARD = REPO / "plugins" / "validation" / "hooks" / "guard.py"
 CHECK_SPECS = REPO / "plugins" / "development" / "githooks" / "check-specs"
 AGENT_RULES = REPO / "plugins" / "development" / "hooks" / "agent-rules.py"
 COMMIT_MESSAGE = REPO / "plugins" / "git" / "githooks" / "commit-message"
+SOLUTION_ITEMS = REPO / "plugins" / "dotnet" / "githooks" / "solution-items"
 
 # The harness resolves user-level paths at import, so point home at a sandbox first.
 HOME = tempfile.TemporaryDirectory()
@@ -1295,3 +1296,85 @@ class AgentRulesTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+SLN = (
+    "\ufeff\r\nMicrosoft Visual Studio Solution File, Format Version 12.00\r\n"
+    'Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{22222222-2222-2222-2222-222222222222}"\r\n'
+    "\tProjectSection(SolutionItems) = preProject\r\n"
+    "\t\tgone.md = gone.md\r\n"
+    "\tEndProjectSection\r\n"
+    "EndProject\r\n"
+    "Global\r\nEndGlobal\r\n"
+)
+
+
+class SolutionItemsTest(ProjectCase):
+    def setUp(self):
+        super().setUp()
+        git(self.project, "init")
+        for name in ("README.md", "docs/specs/a.md", ".github/workflows/ci.yml", "src/App/App.csproj", "src/App/notes.md"):
+            path = self.project / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("")
+
+    def run_check(self, *args):
+        return subprocess.run(
+            [sys.executable, str(SOLUTION_ITEMS), *args],
+            cwd=self.project, capture_output=True, text=True,
+        )
+
+    def test_files_outside_projects_missing_from_the_solution_fail(self):
+        (self.project / "App.slnx").write_text("<Solution />\n")
+
+        result = self.run_check()
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("Missing docs/specs/a.md", result.stdout)
+        self.assertIn("Missing .github/workflows/ci.yml", result.stdout)
+        self.assertNotIn("notes.md", result.stdout)
+
+    def test_fix_maps_files_to_folders_that_mirror_their_directories(self):
+        (self.project / "App.slnx").write_text("<Solution />\n")
+
+        self.run_check("--fix")
+
+        text = (self.project / "App.slnx").read_text()
+        self.assertIn('<Folder Name="/docs/specs/">\n    <File Path="docs/specs/a.md" />', text)
+        self.assertIn('<Folder Name="/Solution Items/">\n    <File Path="README.md" />', text)
+        self.assertEqual(self.run_check().returncode, 0)
+
+    def test_fix_removes_deleted_files_and_their_emptied_folder(self):
+        (self.project / "App.slnx").write_text(
+            '<Solution>\n  <Folder Name="/old/">\n    <File Path="old/x.md" />\n  </Folder>\n</Solution>\n'
+        )
+
+        self.run_check("--fix")
+
+        self.assertNotIn("/old/", (self.project / "App.slnx").read_text())
+
+    def test_fix_nests_sln_folders_and_keeps_bom_and_line_endings(self):
+        (self.project / "App.sln").write_bytes(SLN.encode("utf-8"))
+
+        self.run_check("--fix")
+
+        raw = (self.project / "App.sln").read_bytes()
+        text = raw.decode("utf-8-sig")
+        self.assertTrue(raw.startswith(b"\xef\xbb\xbf"))
+        self.assertNotIn("\n", text.replace("\r\n", ""))
+        self.assertNotIn("gone.md", text)
+        self.assertIn("\t\tdocs\\specs\\a.md = docs\\specs\\a.md", text)
+        self.assertIn("GlobalSection(NestedProjects)", text)
+        self.assertEqual(self.run_check().returncode, 0)
+
+    def test_config_extends_and_narrows_the_defaults(self):
+        (self.project / "App.slnx").write_text("<Solution />\n")
+        (self.project / "deploy").mkdir()
+        (self.project / "deploy/run.sh").write_text("")
+        (self.project / ".agents").mkdir()
+        (self.project / ".agents/solution-items.json").write_text('{"include": ["deploy/**"], "exclude": ["docs/**"]}')
+
+        result = self.run_check()
+
+        self.assertIn("Missing deploy/run.sh", result.stdout)
+        self.assertNotIn("docs/", result.stdout)

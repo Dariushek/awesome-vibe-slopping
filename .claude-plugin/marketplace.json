@@ -33,6 +33,11 @@
       "description": "C# language rules."
     },
     {
+      "name": "dotnet",
+      "source": "./plugins/dotnet",
+      "description": ".NET solution rules: docs, pipelines and build configuration kept visible as solution items, enforced by a check."
+    },
+    {
       "name": "browser",
       "source": "./plugins/browser",
       "description": "Browser automation and scraping: playwright skill."

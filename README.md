@@ -28,6 +28,7 @@ bin/harness                       sync and validation
 | `engineering`   | Code quality, testing and local infrastructure rules  |
 | `git`           | `commit-message` skill, enforced by a `commit-msg` hook |
 | `csharp`        | C# language rules                                     |
+| `dotnet`        | Solution items for docs, pipelines and config, `solution-items` check |
 | `browser`       | `playwright` skill                                    |
 | `architecture`  | ARCHITECTURE.md, ADRs, architecture tests             |
 | `architecture-light` | Short rules in AGENTS.md, no ADRs. Instead of `architecture` |
@@ -128,6 +129,7 @@ A command can take only the changed files:
 |-------|-------------|----------------|
 | Build, analysis, tests | `pre-commit`, `pre-push` | With `--no-verify` |
 | Commit message format, no AI attribution | `commit-msg`, from the `git` bundle | With `--no-verify` |
+| Files outside projects shown in the .NET solution | `.githooks/solution-items`, from the `dotnet` bundle, as a `commit` command | With `--no-verify` |
 | Spec and plan structure | `.githooks/check-specs`, from the `development` bundle, as a `commit` command | With `--no-verify` |
 | `--no-verify`, changes to `core.hooksPath`, `.githooks/` or `.claude/hooks/`, taking the guard out of the agent settings | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
 | Subagents kept to their role: the code reviewer to read-only git, the verifier and the gate runner to no git changes, the task implementer to no push | An agent hook, from the `development` bundle | By agents without tool hooks |
