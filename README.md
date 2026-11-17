@@ -36,6 +36,32 @@ bin/harness                       sync and validation
 | `docs`          | `rs-readme`: what to install, how to run and test     |
 | `testing`       | Integration tests first, fakes, one e2e per feature. `rs-test-setup` |
 
+## Commands
+
+Skills a user can call, as `/<name>` in Claude Code or by name in other agents.
+
+| Bundle | Command | Does |
+|--------|---------|------|
+| `git` | `/commit-message` | Write or fix a commit message |
+| `browser` | `/playwright` | Drive a real browser |
+| `architecture` | `/rs-architecture` | Define or document the architecture in ARCHITECTURE.md |
+| `architecture` | `/rs-architecture-decision` | Record an ADR |
+| `architecture-light` | `/rs-architecture-rules` | Write short architecture rules into AGENTS.md |
+| `development` | `/rs-spec` | Write a feature spec by interview |
+| `development` | `/rs-ui-design` | Clickable prototype of an approved spec |
+| `development` | `/rs-plan` | Split an approved spec into tasks in PLAN.md |
+| `development` | `/rs-implement-task` | Implement one PLAN.md task |
+| `development` | `/rs-run-plan` | Run all remaining tasks, or every approved plan |
+| `development` | `/rs-change` | Small change without a spec |
+| `development` | `/rs-fix-bug` | Reproduce with a failing test, then fix |
+| `development` | `/rs-review` | Fresh-agent code review, then fix findings |
+| `development` | `/rs-verify` | Check a feature against its spec in the running app |
+| `development` | `/rs-check-and-commit` | Run the validation gate, fix, commit |
+| `docs` | `/rs-readme` | Write or update the project README |
+| `testing` | `/rs-test-setup` | Set up integration, fake and e2e testing |
+
+Agents in `development` are dispatched by these skills, not called directly.
+
 ## Use in a project
 
 ```sh
