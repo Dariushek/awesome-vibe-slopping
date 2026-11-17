@@ -22,7 +22,7 @@ VALIDATE = REPO / "plugins" / "validation" / "githooks" / "validate"
 GUARD = REPO / "plugins" / "validation" / "hooks" / "guard.py"
 CHECK_SPECS = REPO / "plugins" / "development" / "githooks" / "check-specs"
 AGENT_RULES = REPO / "plugins" / "development" / "hooks" / "agent-rules.py"
-COMMIT_MESSAGE = REPO / "plugins" / "git" / "githooks" / "commit-message"
+COMMIT_MESSAGE = REPO / "plugins" / "git-hooks" / "githooks" / "commit-message"
 SOLUTION_ITEMS = REPO / "plugins" / "dotnet" / "githooks" / "solution-items"
 
 # The harness resolves user-level paths at import, so point home at a sandbox first.
@@ -125,7 +125,8 @@ class SyncTest(ProjectCase):
     def test_dependencies_are_added_but_not_saved(self):
         out, _ = run("sync", str(self.project), "development")
 
-        self.assertIn("add git: required by development", out)
+        self.assertIn("add git-hooks: required by development", out)
+        self.assertIn("add git: required by git-hooks", out)
         self.assertTrue((self.project / ".agents/skills/commit-message/SKILL.md").is_file())
         self.assertTrue((self.project / ".agents/skills/playwright/SKILL.md").is_file())
         self.assertEqual(self.lock()["bundles"], ["development"])
@@ -135,7 +136,8 @@ class SyncTest(ProjectCase):
 
         out, _ = run("sync", str(self.project), "development")
 
-        self.assertNotIn("required by", out)
+        self.assertNotIn("add git:", out)
+        self.assertNotIn("add browser:", out)
         self.assertFalse((self.project / ".agents/skills/commit-message").exists())
 
     def test_global_bundle_with_rules_warns(self):
@@ -312,6 +314,16 @@ class SyncTest(ProjectCase):
 
         run("sync", str(self.project), "development")
 
+        self.assertTrue((self.project / ".githooks/commit-msg").is_file())
+        self.assertFalse((self.project / ".agents/skills/commit-message").exists())
+
+    def test_hooks_bundle_with_skill_bundle_global_syncs_only_the_hook(self):
+        harness.write_json(harness.GLOBAL_LOCK, {"bundles": ["git"]})
+        git(self.project, "init", "-q")
+
+        out, _ = run("sync", str(self.project), "git-hooks")
+
+        self.assertNotIn("warning: git", out)
         self.assertTrue((self.project / ".githooks/commit-msg").is_file())
         self.assertFalse((self.project / ".agents/skills/commit-message").exists())
 

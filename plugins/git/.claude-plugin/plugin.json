@@ -1,7 +1,7 @@
 {
   "name": "git",
-  "version": "0.4.1",
-  "description": "Git conventions: commit-message skill and the commit-msg hook that enforces it.",
+  "version": "0.5.0",
+  "description": "Git conventions: commit-message skill. Meant for global use.",
   "author": {
     "name": "Dariushek"
   }

@@ -25,7 +25,12 @@
     {
       "name": "git",
       "source": "./plugins/git",
-      "description": "Git conventions: commit-message skill and the commit-msg hook that enforces it."
+      "description": "Git conventions: commit-message skill. Meant for global use."
+    },
+    {
+      "name": "git-hooks",
+      "source": "./plugins/git-hooks",
+      "description": "commit-msg hook that enforces the commit-message skill. Sync into projects that need enforcement."
     },
     {
       "name": "csharp",

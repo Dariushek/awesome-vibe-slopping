@@ -1,0 +1,11 @@
+{
+  "name": "git-hooks",
+  "version": "0.1.0",
+  "description": "commit-msg hook that enforces the commit-message skill. Sync into projects that need enforcement.",
+  "author": {
+    "name": "Dariushek"
+  },
+  "dependencies": [
+    "git"
+  ]
+}

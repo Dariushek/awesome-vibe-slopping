@@ -26,7 +26,8 @@ bin/harness                       sync and validation
 | `communication` | How agents write and talk. Global, also outside code  |
 | `coding`        | General rules for working with code                   |
 | `engineering`   | Code quality, testing and local infrastructure rules  |
-| `git`           | `commit-message` skill, enforced by a `commit-msg` hook |
+| `git`           | `commit-message` skill. Meant for global use          |
+| `git-hooks`     | `commit-msg` hook enforcing it. Needs `git`           |
 | `csharp`        | C# language rules                                     |
 | `dotnet`        | Solution items for docs, pipelines and config, `solution-items` check |
 | `browser`       | `playwright` skill                                    |
@@ -128,7 +129,7 @@ A command can take only the changed files:
 | Check | Enforced by | Can be skipped |
 |-------|-------------|----------------|
 | Build, analysis, tests | `pre-commit`, `pre-push` | With `--no-verify` |
-| Commit message format, no AI attribution | `commit-msg`, from the `git` bundle | With `--no-verify` |
+| Commit message format, no AI attribution | `commit-msg`, from the `git-hooks` bundle | With `--no-verify` |
 | Files outside projects shown in the .NET solution | `.githooks/solution-items`, from the `dotnet` bundle, as a `commit` command | With `--no-verify` |
 | Spec and plan structure | `.githooks/check-specs`, from the `development` bundle, as a `commit` command | With `--no-verify` |
 | `--no-verify`, changes to `core.hooksPath`, `.githooks/` or `.claude/hooks/`, taking the guard out of the agent settings | An agent hook, from the `validation` bundle | By a human, and by agents without tool hooks |
