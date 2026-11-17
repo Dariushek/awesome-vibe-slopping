@@ -1,6 +1,6 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "23fed4b-dirty",
+  "commit": "e11bdd9-dirty",
   "bundles": [
     "git",
     "validation"
@@ -12,15 +12,15 @@
   ],
   "files": {
     ".githooks/commit-message": "532ae5e52ef684a3dccb522d3593eb1672abf5baccca6154602d80ca6dc5622e",
-    ".githooks/commit-msg": "2200f95da4c604b03c17616bb32d43aa1f931ce35b2cedf4fc0ec35837775c65",
-    ".githooks/pre-commit": "afbf4c4e9d0caba190fd2075d0953730312657d07784248329d52ac8cc2485ad",
-    ".githooks/pre-push": "af5b2fcb1b25aaa51b1a67a1500e92a02a05c110cf5bfd5476286cb0a0b3f6b7",
+    ".githooks/commit-msg": "20bebea611579aa3612a55d6924747cbe8a9bb72e915fd7b1715ef05fb0307fb",
+    ".githooks/pre-commit": "d5bdccba7b4ac09cdaf13cd6a9eb25b65b14f47dc23b8a23034cb1722f8cbf39",
+    ".githooks/pre-push": "15aa8e09215c63e412fccf768854f2242a0a645577b087da231fa01f29d697b1",
     ".githooks/validate": "8d9acf581cca51323cf89ca714b024c6dd8134f5995cf493c9031820d7c4f66a",
     ".agents/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
     ".claude/skills/commit-message/SKILL.md": "71b8e0b3a50e949ba065b573e9e9bbfd144dd1d422a8770acb1083a89bcafa7f",
-    ".devin/hooks/guard": "5832424ddd19e322b68916650c726ddb8ce07cb4bf36cd833331071c43723b66",
+    ".devin/hooks/guard": "853462f78594f51bc6b94f2b1e2786606243d6f8ef6386dc957d428d46e59b8b",
     ".devin/hooks/guard.py": "60b388e1c4a3a898942705971ffd3cec8c9af7162274643c4f3ab251857deb24",
-    ".claude/hooks/guard": "5832424ddd19e322b68916650c726ddb8ce07cb4bf36cd833331071c43723b66",
+    ".claude/hooks/guard": "853462f78594f51bc6b94f2b1e2786606243d6f8ef6386dc957d428d46e59b8b",
     ".claude/hooks/guard.py": "60b388e1c4a3a898942705971ffd3cec8c9af7162274643c4f3ab251857deb24"
   }
 }
