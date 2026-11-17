@@ -1,6 +1,6 @@
 {
   "name": "engineering",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "Code quality, testing and local infrastructure rules.",
   "author": {
     "name": "Dariushek"

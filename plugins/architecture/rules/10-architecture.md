@@ -1,4 +1,4 @@
-## Architecture
+## Following the architecture
 
 - Before writing code, read ARCHITECTURE.md and the accepted ADRs that touch the area you change. Follow them.
 - If the project has neither, derive the architecture from the existing code and suggest rs-architecture to the user.

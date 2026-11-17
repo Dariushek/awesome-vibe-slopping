@@ -1,6 +1,6 @@
 ## Test strategy
 
-- Before writing tests, read the `## Testing` section of the project's AGENTS.md. If it is missing, suggest rs-test-setup to the user.
+- Before writing tests, read the `## Testing` section of the project's AGENTS.md, outside the generated block. If it is missing, suggest rs-test-setup to the user.
 - Test behavior through the public API: the web API when there is one, otherwise the public API of the module.
 - The default test is an integration test: the API with its database.
 - Database, when the project uses containers: the real engine in a container with in-memory storage.

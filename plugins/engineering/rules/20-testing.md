@@ -1,4 +1,4 @@
-## Testing
+## Writing tests
 
 - Write automated tests with TDD: first a failing test, then the implementation that makes it pass. Never both at the same time.
 - The test must fail on its assertion about the behavior under test, such as a status left unset or at its default. A compile error, a runtime exception or a broken setup is no valid failure. Add just enough code to reach the assertion, such as an empty method.

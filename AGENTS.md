@@ -6,7 +6,7 @@ This repo is the harness source of truth. Layout and usage: README.md.
 - Rules: one topic per file, start with a `##` heading, numeric prefix sets order.
 - Skills: `skills/<name>/SKILL.md` with `name` equal to the directory and a `description` saying when to use it. Right after the title, point to the project override `.agents/overrides/<name>.md`.
 - Agents: `agents/<name>.md` with `name` equal to the file stem and a `description`.
-- Nothing project-specific here. Project facts stay in the project's own AGENTS.md, outside the managed block.
+- Nothing project-specific here. Project facts stay in the project's own AGENTS.md, outside the generated block.
 - Bump the bundle `version` on every change.
 - `bin/harness check` fails when a changed bundle has no version bump, a referenced skill does not exist or descriptions drift.
 - Change `bin/harness` with a test in `tests/`.

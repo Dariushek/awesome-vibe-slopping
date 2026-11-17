@@ -1,6 +1,6 @@
 ---
 name: rs-test-setup
-description: Set up automated testing in a project: integration tests through the public API with a database, fakes for services that cannot run locally, one end-to-end test and the commands in the validation gate. Use when the project has no `## Testing` section in AGENTS.md, when the user asks to set up or change how the project is tested, or when a new kind of infrastructure needs a fake.
+description: Set up automated testing in a project: integration tests through the public API with a database, fakes for services that cannot run locally, one end-to-end test and the commands in the validation gate. Use when the project has no `## Testing` section in AGENTS.md outside the generated block, when the user asks to set up or change how the project is tested, or when a new kind of infrastructure needs a fake.
 ---
 
 # Test setup

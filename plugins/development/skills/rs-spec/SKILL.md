@@ -19,7 +19,7 @@ The spec describes the domain the way the user sees it, then the scenarios and c
 6. **Design.** Add the technical part: approach, affected areas, failures, architecture decisions. If the change adds or changes an external system, container or component, include the changed C4 diagram from ARCHITECTURE.md.
 7. **Review.** Run `.githooks/check-specs <spec folder>` and fix what it reports. Then hand the spec path, and nothing else, to the rs-spec-reviewer agent, or any fresh subagent with the checklist below. If you cannot run subagents, apply the checklist yourself, line by line. Before fixing, append a `## Spec review YYYY-MM-DD` section to `REVIEW.md` next to the spec with the findings as returned, or `No findings`. Fix every finding and note the fix under each.
 8. **Approve.** Iterate until the user approves, then set `Status: Approved`.
-9. **Decisions.** Record each architecture decision with rs-architecture-decision. In a project without ADRs, update the `## Architecture` rules in AGENTS.md instead, with the user's OK. Decisions the user approved with the spec are `Accepted`. Link the ADRs from the spec.
+9. **Decisions.** Record each architecture decision with rs-architecture-decision. In a project without ADRs, update the `## Architecture` rules outside the generated block of AGENTS.md instead, with the user's OK. Decisions the user approved with the spec are `Accepted`. Link the ADRs from the spec.
 10. Next step: rs-ui-design when users see the change, otherwise rs-plan with `Prototype: Not applicable`.
 
 ## Interview techniques
