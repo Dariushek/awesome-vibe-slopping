@@ -1,7 +1,7 @@
 {
   "name": "after-edit",
-  "version": "0.2.0",
-  "description": "Run the project's per-file commands, such as a formatter, after every agent edit.",
+  "version": "0.3.0",
+  "description": "Run the project's fixes, such as formatters, after each agent edit and when the agent finishes.",
   "author": {
     "name": "Dariushek"
   }

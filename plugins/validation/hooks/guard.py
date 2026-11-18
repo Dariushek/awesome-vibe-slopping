@@ -200,7 +200,11 @@ def after_edit_commands(text):
     except ValueError:
         return None
 
-    return [str(c) for c in config] if isinstance(config, list) else None
+    config = {"edit": config} if isinstance(config, list) else config
+    if not isinstance(config, dict):
+        return None
+
+    return [f"{stage}: {c}" for stage, listed in config.items() if isinstance(listed, list) for c in listed]
 
 
 def check_after_edit(before, after):
@@ -210,7 +214,7 @@ def check_after_edit(before, after):
     if now is None or now != was:
         added = [c for c in now or [] if c not in (was or [])]
         listed = "; ".join(added) if added else "the list"
-        raise Ask(f"This changes the commands run after every edit, which needs your approval: {listed}")
+        raise Ask(f"This changes the commands agent hooks run after edits, which needs your approval: {listed}")
 
 
 def ends_with(parts, tail):

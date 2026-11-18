@@ -70,7 +70,7 @@
     {
       "name": "after-edit",
       "source": "./plugins/after-edit",
-      "description": "Run the project's per-file commands, such as a formatter, after every agent edit."
+      "description": "Run the project's fixes, such as formatters, after each agent edit and when the agent finishes."
     },
     {
       "name": "docs",

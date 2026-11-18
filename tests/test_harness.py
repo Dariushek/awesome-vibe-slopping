@@ -1023,6 +1023,18 @@ class GuardedFilesTest(ProjectCase):
 
         self.assert_allowed(self.call("Write", file_path=str(path), content='[\n  "fmt {changed}"\n]'))
 
+    def test_adding_a_finish_command_asks_the_user(self):
+        path = self.write(".agents/after-edit.json", '["fmt {changed}"]')
+
+        content = '{"edit": ["fmt {changed}"], "finish": ["jb {changed}"]}'
+
+        self.assert_asks(self.call("Write", file_path=str(path), content=content), "finish: jb {changed}")
+
+    def test_moving_edit_commands_into_an_object_unchanged_is_allowed(self):
+        path = self.write(".agents/after-edit.json", '["fmt {changed}"]')
+
+        self.assert_allowed(self.call("Write", file_path=str(path), content='{"edit": ["fmt {changed}"]}'))
+
     def test_changing_the_after_edit_file_from_the_shell_asks_the_user(self):
         self.assert_asks(self.call("Bash", command="echo '[]' > .agents/after-edit.json"), "after-edit.json")
 
@@ -1459,9 +1471,75 @@ class AfterEditTest(ProjectCase):
         self.assertEqual(self.edit(), "")
 
     def test_invalid_config_is_reported(self):
-        (self.project / ".agents/after-edit.json").write_text('{"commit": []}')
+        (self.project / ".agents/after-edit.json").write_text('{"finsh": []}')
 
-        self.assertIn("must be a list", self.edit())
+        self.assertIn("unknown keys finsh", self.edit())
+
+    def finish(self, env=None):
+        call = {"hook_event_name": "Stop", "cwd": str(self.project)}
+        result = subprocess.run(
+            [sys.executable, str(AFTER_EDIT), "finish"], input=json.dumps(call), capture_output=True, text=True,
+            env={**os.environ, "CLAUDE_PROJECT_DIR": "", "DEVIN_PROJECT_DIR": "", **(env or {})},
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+        return result.stdout
+
+    LOG = "{python} -c \"import sys; open('log.txt', 'a').write(' '.join(sys.argv[1:]) + chr(10))\" "
+
+    def log(self):
+        path = self.project / "log.txt"
+        return path.read_text().splitlines() if path.is_file() else []
+
+    def test_object_config_runs_edit_commands_after_edits_only(self):
+        (self.project / ".agents/after-edit.json").write_text(json.dumps({
+            "edit": [self.LOG + "edit {changed}"], "finish": [self.LOG + "finish {changed}"],
+        }))
+
+        self.edit()
+
+        self.assertEqual(self.log(), ["edit src/a.cs"])
+
+    def test_finish_runs_commands_in_order_on_every_changed_file(self):
+        (self.project / "src/b.cs").write_text("y")
+        (self.project / ".agents/after-edit.json").write_text(json.dumps({
+            "finish": [self.LOG + "first {changed:*.cs}", self.LOG + "--include={changed:*.cs:;}"],
+        }))
+
+        self.assertEqual(self.finish(), "")
+
+        self.assertEqual(self.log(), ["first src/a.cs src/b.cs", "--include=src/a.cs;src/b.cs"])
+
+    def test_finish_does_not_run_again_on_the_same_tree(self):
+        (self.project / ".agents/after-edit.json").write_text(json.dumps({"finish": [self.LOG + "{changed:*.cs}"]}))
+        (self.project / ".git/info/exclude").write_text("log.txt\n")
+
+        self.finish()
+        self.finish()
+        self.file.write_text("changed")
+        self.finish()
+
+        self.assertEqual(self.log(), ["src/a.cs", "src/a.cs"])
+
+    def test_failing_finish_command_sends_the_agent_back_once(self):
+        (self.project / ".agents/after-edit.json").write_text(json.dumps({
+            "finish": ["{python} -c \"print('jb failed'); raise SystemExit(1)\" {changed}"],
+        }))
+
+        first = json.loads(self.finish())
+
+        self.assertEqual(first["decision"], "block")
+        self.assertIn("jb failed", first["reason"])
+        self.assertEqual(self.finish(), "")
+
+    def test_finish_without_changes_runs_nothing(self):
+        (self.project / ".agents/after-edit.json").write_text(json.dumps({"finish": [self.LOG + "x"]}))
+        (self.project / ".git/info/exclude").write_text("log.txt\n")
+        git(self.project, "add", "-A")
+        git(self.project, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "base")
+
+        self.finish()
+
+        self.assertEqual(self.log(), [])
 
     def test_devin_patch_runs_the_command_on_every_file_it_names(self):
         (self.project / "src/b.cs").write_text("y")
@@ -1479,4 +1557,5 @@ class AfterEditTest(ProjectCase):
         hooks = json.loads((self.project / ".devin/hooks.v1.json").read_text())
 
         self.assertIn("apply_patch", hooks["PostToolUse"][0]["matcher"])
+        self.assertIn("finish", hooks["Stop"][0]["hooks"][0]["command"])
         self.assertTrue((self.project / ".devin/hooks/after-edit.py").is_file())

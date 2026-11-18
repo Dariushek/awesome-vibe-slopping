@@ -4,4 +4,4 @@ for python in python3 python py; do
   python=
 done
 [ -n "$python" ] || exit 0
-exec "$python" "$(dirname "$0")/after-edit.py"
+exec "$python" "$(dirname "$0")/after-edit.py" "$@"

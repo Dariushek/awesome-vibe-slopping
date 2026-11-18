@@ -6,7 +6,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/after-edit\""
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/after-edit\" edit"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/hooks/after-edit\" finish",
+            "timeout": 900
           }
         ]
       }

@@ -5,7 +5,17 @@
       "hooks": [
         {
           "type": "command",
-          "command": "sh \"{hooks_dir}/after-edit\""
+          "command": "sh \"{hooks_dir}/after-edit\" edit"
+        }
+      ]
+    }
+  ],
+  "Stop": [
+    {
+      "hooks": [
+        {
+          "type": "command",
+          "command": "sh \"{hooks_dir}/after-edit\" finish"
         }
       ]
     }

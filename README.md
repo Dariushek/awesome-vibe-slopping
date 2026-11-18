@@ -35,7 +35,7 @@ bin/harness                       sync and validation
 | `architecture-light` | Short rules in AGENTS.md, no ADRs. Instead of `architecture` |
 | `development`   | Bug fix, small change, spec, UI, plan, tasks, review  |
 | `validation`    | Build, analysis and test gate enforced by git hooks   |
-| `after-edit`    | Per-file commands, such as a formatter, after every agent edit |
+| `after-edit`    | Formatters and other fixes after each agent edit and at the end of its turn |
 | `docs`          | `rs-readme`: what to install, how to run and test     |
 | `testing`       | Integration tests first, fakes, one e2e per feature. `rs-test-setup` |
 
@@ -161,13 +161,25 @@ An optional `run` entry, `{"start": "...", "url": "..."}`, tells agents how to s
 
 ## After edit
 
-The `after-edit` bundle runs commands on every file an agent writes, such as a formatter. The project lists them in `.agents/after-edit.json`, with the same `{changed}` and `{python}` placeholders as the validation gate. `{changed}` is the edited file:
+The `after-edit` bundle runs the project's commands, such as formatters, on files an agent changed. The project lists them in `.agents/after-edit.json`:
 
 ```json
-["dotnet format whitespace --folder --include {changed:*.cs}"]
+{
+  "edit": ["dotnet format whitespace --folder --include {changed:*.cs}"],
+  "finish": [
+    "dotnet format style --severity info --include {changed:*.cs}",
+    "dotnet jb cleanupcode App.slnx --profile=\"Built-in: Full Cleanup\" --no-build --include={changed:*.cs:;}"
+  ]
+}
 ```
 
-A command whose pattern does not match the file is skipped. A failing one never blocks the edit; its output goes back to the agent. Keep them fast, since the agent waits after every edit. The full check stays in `commit`. The hook runs these commands without asking, so the `validation` guard asks the user before an agent changes the file. Claude Code and Devin both run it, Devin through the `devin` target.
+- `edit` runs after each edit, on that file. Keep it fast, since the agent waits every time. A failing command never blocks; its output goes back to the agent. A plain list is the `edit` list.
+- `finish` runs in order when the agent ends its turn, on every file changed since `HEAD`. It does not run again until the tree changes. A failing command sends the agent back once with its output.
+- Placeholders are those of the validation gate. `{changed:*.cs:;}` joins the files into one argument with `;`, for tools such as `jb` that take a list in one option.
+- Commands that only fix belong here, their checks in `commit`, such as `dotnet format style --verify-no-changes`.
+- A `finish` command must work on code that does not build yet, such as `jb cleanupcode --no-build`. Otherwise it fails whenever the agent leaves a compile error.
+
+The hooks run these commands without asking, so the `validation` guard asks the user before an agent changes the file. Claude Code and Devin both run them, Devin through the `devin` target.
 
 ## Global
 
