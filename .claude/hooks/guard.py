@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Refuse tool calls that would bypass, disable or quietly weaken the validation gate.
+"""Refuse tool calls that would bypass, disable or quietly weaken the validation gate,
+or quietly change the commands agent hooks run.
 
 Reads the tool call as JSON on standard input. Exit code 2 blocks the call and
 shows the message to the agent. A decision printed as JSON asks the user first.
@@ -22,6 +23,7 @@ NEW_FIELDS = ("new_string", "new_str", "new_text")
 MANAGED_DIRS = ((".githooks",), (".claude", "hooks"), (".devin", "hooks"))
 SETTINGS = ((".claude", "settings.json"), (".claude", "settings.local.json"), (".devin", "hooks.v1.json"))
 VALIDATION = (".agents", "validation.json")
+AFTER_EDIT = (".agents", "after-edit.json")
 STAGES = ("commit", "push")
 GUARD_COMMANDS = (".claude/hooks/guard", ".devin/hooks/guard")
 GUARD_PLUGIN = "validation@"
@@ -44,7 +46,7 @@ CHANGES_FILES = re.compile(r"(^|\s)(rm|mv|cp|chmod|truncate|unlink|tee|sed|ln)\b
 START = r"(^|[\s/\"'=>])"
 MANAGED_PATH = re.compile(START + r"(\.githooks|\.claude/hooks|\.devin/hooks)(/|(?![\w.]))")
 SETTINGS_PATH = re.compile(START + r"(\.claude/settings(\.local)?\.json|\.devin/hooks\.v1\.json)\b")
-VALIDATION_PATH = re.compile(START + r"\.agents/validation\.json\b")
+VALIDATION_PATH = re.compile(START + r"\.agents/(validation|after-edit)\.json\b")
 REDIRECT = re.compile(r">\s*[\"']?\S*$|>\s*[\"']?\S*(\.githooks|\.claude|\.agents|\.devin)/")
 
 NO_VERIFY_REASON = (
@@ -67,10 +69,10 @@ HOOKS_OFF_REASON = f"{HOOKS_OFF} would switch the validation guard off. It must 
 INVALID_SETTINGS_REASON = "This change would leave the settings as invalid JSON, which switches the guard off."
 UNCHECKED_SETTINGS_REASON = "This change to the agent settings cannot be checked, so it is refused."
 CANNOT_ASK_REASON = " This agent cannot ask for approval here, so stop and ask the user to make the change."
-VALIDATION_UNCHECKED_REASON = "A change to .agents/validation.json needs the user's approval."
+VALIDATION_UNCHECKED_REASON = "A change to the commands in .agents/ needs the user's approval."
 VALIDATION_SHELL_REASON = (
-    "This command may change .agents/validation.json. Removing or changing a validation "
-    "command needs the user's approval."
+    "This command may change .agents/validation.json or .agents/after-edit.json. Changing "
+    "the commands they hold needs the user's approval."
 )
 
 
@@ -192,6 +194,29 @@ def check_validation(before, after):
         raise Ask(f"This removes or changes validation commands, which needs your approval: {listed}")
 
 
+def after_edit_commands(text):
+    try:
+        config = json.loads(text)
+    except ValueError:
+        return None
+
+    config = {"edit": config} if isinstance(config, list) else config
+    if not isinstance(config, dict):
+        return None
+
+    return [f"{stage}: {c}" for stage, listed in config.items() if isinstance(listed, list) for c in listed]
+
+
+def check_after_edit(before, after):
+    """An agent hook runs these commands unprompted, so any change to them is the user's call."""
+    was = after_edit_commands(before) if before else []
+    now = after_edit_commands(after)
+    if now is None or now != was:
+        added = [c for c in now or [] if c not in (was or [])]
+        listed = "; ".join(added) if added else "the list"
+        raise Ask(f"This changes the commands agent hooks run after edits, which needs your approval: {listed}")
+
+
 def ends_with(parts, tail):
     return tuple(parts[-len(tail):]) == tail
 
@@ -205,7 +230,8 @@ def check_file(tool, tool_input, foreign):
             raise Block(MANAGED_REASON)
 
     is_settings = any(ends_with(parts, name) for name in SETTINGS)
-    if not is_settings and not ends_with(parts, VALIDATION):
+    is_after_edit = ends_with(parts, AFTER_EDIT)
+    if not is_settings and not is_after_edit and not ends_with(parts, VALIDATION):
         return
 
     before = current_text(path)
@@ -219,6 +245,8 @@ def check_file(tool, tool_input, foreign):
 
     if is_settings:
         check_settings(before, after)
+    elif is_after_edit:
+        check_after_edit(before, after)
     else:
         check_validation(before, after)
 
