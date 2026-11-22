@@ -1,6 +1,6 @@
 {
   "source": "Dariushek/awesome-vibe-slopping",
-  "commit": "4e5a0e6-dirty",
+  "commit": "0614e96-dirty",
   "bundles": [
     "git-hooks",
     "validation"
@@ -17,8 +17,8 @@
     ".githooks/pre-push": "15aa8e09215c63e412fccf768854f2242a0a645577b087da231fa01f29d697b1",
     ".githooks/validate": "7a5012131cce51c488b86441619f7358847cb196dbe7e41cbb696feee8d3a1d9",
     ".devin/hooks/guard": "853462f78594f51bc6b94f2b1e2786606243d6f8ef6386dc957d428d46e59b8b",
-    ".devin/hooks/guard.py": "fa5db9875259a1fcd0955ad644c2b2f9e9c05c226c12ced5a89e334b9de55b06",
+    ".devin/hooks/guard.py": "60976b6c6ed3eae17f350d9fcfce5b7135e4e12020cdcbe2321d516b31744ea7",
     ".claude/hooks/guard": "853462f78594f51bc6b94f2b1e2786606243d6f8ef6386dc957d428d46e59b8b",
-    ".claude/hooks/guard.py": "fa5db9875259a1fcd0955ad644c2b2f9e9c05c226c12ced5a89e334b9de55b06"
+    ".claude/hooks/guard.py": "60976b6c6ed3eae17f350d9fcfce5b7135e4e12020cdcbe2321d516b31744ea7"
   }
 }

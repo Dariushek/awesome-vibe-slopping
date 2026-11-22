@@ -48,6 +48,8 @@ MANAGED_PATH = re.compile(START + r"(\.githooks|\.claude/hooks|\.devin/hooks)(/|
 SETTINGS_PATH = re.compile(START + r"(\.claude/settings(\.local)?\.json|\.devin/hooks\.v1\.json)\b")
 VALIDATION_PATH = re.compile(START + r"\.agents/(validation|after-edit)\.json\b")
 REDIRECT = re.compile(r">\s*[\"']?\S*$|>\s*[\"']?\S*(\.githooks|\.claude|\.agents|\.devin)/")
+# Discarding output or joining streams writes no file.
+HARMLESS_REDIRECT = re.compile(r"\d*>>?\s*(/dev/null\b|&\s*[\d-])|&>>?\s*/dev/null\b")
 
 NO_VERIFY_REASON = (
     "--no-verify skips the validation hooks. Run the commit or push without it "
@@ -85,7 +87,7 @@ class Ask(Exception):
 
 
 def changes(segment):
-    return CHANGES_FILES.search(segment) or REDIRECT.search(segment)
+    return CHANGES_FILES.search(segment) or REDIRECT.search(HARMLESS_REDIRECT.sub(" ", segment))
 
 
 def check_command(command):
