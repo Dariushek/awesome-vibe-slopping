@@ -1041,6 +1041,16 @@ class GuardedFilesTest(ProjectCase):
     def test_reading_the_validation_file_is_allowed(self):
         self.assert_allowed(self.call("Bash", command="cat .agents/validation.json"))
 
+    def test_reading_the_validation_file_discarding_errors_is_allowed(self):
+        command = "cat .agents/validation.json 2>/dev/null; ls .agents 2>&1"
+
+        self.assert_allowed(self.call("Bash", command=command))
+
+    def test_writing_the_validation_file_after_discarding_errors_asks_the_user(self):
+        command = "echo x 2>/dev/null > .agents/validation.json"
+
+        self.assert_asks(self.call("Bash", command=command), "validation.json")
+
     def test_devin_shell_command_skipping_the_hooks_is_blocked(self):
         self.assert_blocked(self.call("exec", command="git commit --no-verify -m x", shell_id="main"), "--no-verify")
 
